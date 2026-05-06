@@ -83,43 +83,23 @@ func Project(doc, projection bsonkit.Doc) (bsonkit.Doc, error) {
 				}
 			}
 		}
-	}
-
-	// perform exclusion
-	if len(state.exclude) > 0 {
-		// clone document
+	} else {
+		// no inclusion: start from a full clone so operator-only projections
+		// (e.g. $slice without inclusion fields) preserve every other field
 		res = bsonkit.Clone(doc)
 
-		// unset excluded fields
+		// apply exclusions on the clone
 		for _, path := range state.exclude {
 			bsonkit.Unset(res, path)
 		}
 	}
 
-	// merge fields
+	// merge fields (overlays from operator expressions)
 	for path, value := range state.merge {
-		// check result
-		if res == nil {
-			// set null document
-			res = &bson.D{}
-
-			// copy id
-			_, err := bsonkit.Put(res, "_id", bsonkit.Get(doc, "_id"), false)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		// add field
 		_, err := bsonkit.Put(res, path, value, false)
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	// ensure doc
-	if res == nil {
-		res = bsonkit.Clone(doc)
 	}
 
 	// hide id

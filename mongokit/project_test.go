@@ -279,4 +279,22 @@ func TestProjectSlice(t *testing.T) {
 			},
 		})
 	})
+
+	// $slice alone preserves all other fields (regression: previously
+	// dropped every field except _id and the sliced one)
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": bson.A{int32(1), int32(2), int32(3), int32(4)},
+		"bar": "baz",
+		"qux": int32(7),
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$slice": 2},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{int32(1), int32(2)},
+			"bar": "baz",
+			"qux": int32(7),
+		})
+	})
 }
