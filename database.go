@@ -153,19 +153,16 @@ func (d *Database) ListCollections(ctx context.Context, filter interface{}, opts
 		return nil, err
 	}
 
-	// begin transaction
-	txn, err := d.engine.Begin(ctx, false)
+	// list collections (route through useTransaction so session-bound
+	// transactions are honored)
+	res, err := useTransaction(ctx, d.engine, false, func(txn *Transaction) (interface{}, error) {
+		return txn.ListCollections(Handle{d.name}, query)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// list collections
-	list, err := txn.ListCollections(Handle{d.name}, query)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Cursor{list: list}, nil
+	return &Cursor{list: res.(bsonkit.List)}, nil
 }
 
 // Name implements the IDatabase.Name method.

@@ -95,17 +95,15 @@ func (c *Client) ListDatabases(ctx context.Context, filter interface{}, opts ...
 		return mongo.ListDatabasesResult{}, err
 	}
 
-	// begin transaction
-	txn, err := c.engine.Begin(ctx, false)
+	// list databases (route through useTransaction so session-bound
+	// transactions are honored)
+	res, err := useTransaction(ctx, c.engine, false, func(txn *Transaction) (interface{}, error) {
+		return txn.ListDatabases(query)
+	})
 	if err != nil {
 		return mongo.ListDatabasesResult{}, err
 	}
-
-	// list collections
-	list, err := txn.ListDatabases(query)
-	if err != nil {
-		return mongo.ListDatabasesResult{}, err
-	}
+	list := res.(bsonkit.List)
 
 	// decode documents
 	specs := make([]mongo.DatabaseSpecification, 0, len(list))

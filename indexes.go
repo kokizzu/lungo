@@ -220,19 +220,16 @@ func (v *IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 		"MaxTime":   ignored,
 	})
 
-	// begin transaction
-	txn, err := v.engine.Begin(ctx, false)
+	// list indexes (route through useTransaction so session-bound
+	// transactions are honored)
+	res, err := useTransaction(ctx, v.engine, false, func(txn *Transaction) (interface{}, error) {
+		return txn.ListIndexes(v.handle)
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// list indexes
-	list, err := txn.ListIndexes(v.handle)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Cursor{list: list}, nil
+	return &Cursor{list: res.(bsonkit.List)}, nil
 }
 
 // ListSpecifications implements the IIndexView.ListSpecifications method.

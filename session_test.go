@@ -242,3 +242,28 @@ func TestSessionAutomatic(t *testing.T) {
 		}, readAll(csr))
 	})
 }
+
+func TestSessionListOpsHonorTransaction(t *testing.T) {
+	d := testLungoClient.Database(testDB)
+
+	// pre-existing collection so the database exists
+	_, err := d.Collection("session-list-pre").InsertOne(nil, bson.M{"x": 1})
+	assert.NoError(t, err)
+
+	err = d.Client().UseSession(nil, func(sc ISessionContext) error {
+		_, err := sc.WithTransaction(sc, func(sc ISessionContext) (interface{}, error) {
+			// create a new collection inside the transaction
+			_, err := d.Collection("session-list-new").InsertOne(sc, bson.M{"x": 1})
+			assert.NoError(t, err)
+
+			// ListCollectionNames inside the transaction must see it
+			names, err := d.ListCollectionNames(sc, bson.M{})
+			assert.NoError(t, err)
+			assert.Contains(t, names, "session-list-new")
+
+			return nil, nil
+		})
+		return err
+	})
+	assert.NoError(t, err)
+}
