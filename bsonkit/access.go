@@ -96,8 +96,8 @@ func get(v interface{}, path string, collect, compact bool) (interface{}, bool) 
 				if value == Missing && !compact {
 					res = append(res, value)
 				} else if value != Missing {
-					if ok && compact {
-						res = append(res, value.(bson.A)...)
+					if a, isArr := value.(bson.A); ok && compact && isArr {
+						res = append(res, a...)
 					} else {
 						res = append(res, value)
 					}
