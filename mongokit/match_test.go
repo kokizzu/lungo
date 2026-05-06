@@ -1089,6 +1089,16 @@ func TestMatchSize(t *testing.T) {
 		fn(bson.M{
 			"baz.foo": bson.M{"$size": int32(2)},
 		}, false)
+
+		// integer-valued float (whole) is accepted
+		fn(bson.M{
+			"bar": bson.M{"$size": 2.0},
+		}, true)
+
+		// fractional float is rejected (regression: previously matched none)
+		fn(bson.M{
+			"bar": bson.M{"$size": 1.5},
+		}, "$size: expected integer")
 	})
 }
 

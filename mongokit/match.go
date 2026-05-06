@@ -376,18 +376,26 @@ func matchAll(_ Context, doc bsonkit.Doc, name, path string, v interface{}) erro
 
 func matchSize(_ Context, doc bsonkit.Doc, name, path string, v interface{}) error {
 	return matchUnwind(doc, path, false, false, func(field interface{}) error {
-		// check value
-		vc, _ := bsonkit.Inspect(v)
-		if vc != bsonkit.Number {
+		// require an integer value (int32, int64 or whole-valued float64)
+		var size int64
+		switch n := v.(type) {
+		case int32:
+			size = int64(n)
+		case int64:
+			size = n
+		case float64:
+			if n != float64(int64(n)) {
+				return fmt.Errorf("%s: expected integer", name)
+			}
+			size = int64(n)
+		default:
 			return fmt.Errorf("%s: expected number", name)
 		}
 
 		// compare length if array
 		array, ok := field.(bson.A)
-		if ok {
-			if bsonkit.Compare(int64(len(array)), v) == 0 {
-				return nil
-			}
+		if ok && int64(len(array)) == size {
+			return nil
 		}
 
 		return ErrNotMatched
