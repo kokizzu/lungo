@@ -29,6 +29,7 @@ func init() {
 	FieldUpdateOperators["$pop"] = applyPop
 	FieldUpdateOperators["$pull"] = applyPull
 	FieldUpdateOperators["$pullAll"] = applyPullAll
+	FieldUpdateOperators["$addToSet"] = applyAddToSet
 }
 
 // Changes record the applied changes to a document.

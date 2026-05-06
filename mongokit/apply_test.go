@@ -1196,3 +1196,61 @@ func TestApplyPullAll(t *testing.T) {
 		}))
 	})
 }
+
+func TestApplyAddToSet(t *testing.T) {
+	// adds when not present, no-op when present
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$addToSet": bson.M{
+				"foo": "c",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c"},
+		}))
+	})
+
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$addToSet": bson.M{
+				"foo": "a",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b"},
+		}))
+	})
+
+	// $each form, mixing already-present and new
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$addToSet": bson.M{
+				"foo": bson.M{"$each": bson.A{"a", "b", "c", "b"}},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c"},
+		}))
+	})
+
+	// missing field becomes a new array (use a callback so we don't depend on
+	// bson.M map iteration order in the round-tripped Mongo result)
+	applyTest(t, false, bson.M{
+		"x": int32(1),
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$addToSet": bson.M{
+				"foo": "a",
+			},
+		}, nil, func(t *testing.T, d bson.D) {
+			m := bson.M{}
+			for _, e := range d {
+				m[e.Key] = e.Value
+			}
+			assert.Equal(t, bson.M{"x": int32(1), "foo": bson.A{"a"}}, m)
+		})
+	})
+}
