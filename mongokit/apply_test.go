@@ -1088,3 +1088,85 @@ func TestApplyPop(t *testing.T) {
 		},
 	}, changes)
 }
+
+func TestApplyPull(t *testing.T) {
+	// missing field is a no-op
+	applyTest(t, false, bson.M{
+		"foo": "bar",
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pull": bson.M{
+				"missing": "x",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": "bar",
+		}))
+	})
+
+	// non-array target
+	applyTest(t, false, bson.M{
+		"foo": "bar",
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pull": bson.M{
+				"foo": "x",
+			},
+		}, nil, "$pull: target field must be an array")
+	})
+
+	// scalar equality
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b", "c", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pull": bson.M{
+				"foo": "b",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "c"},
+		}))
+	})
+
+	// expression
+	applyTest(t, false, bson.M{
+		"foo": bson.A{int32(1), int32(2), int32(3), int32(4)},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pull": bson.M{
+				"foo": bson.M{"$gte": 3},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{int32(1), int32(2)},
+		}))
+	})
+
+	// subdocument query
+	applyTest(t, false, bson.M{
+		"foo": bson.A{
+			bson.M{"k": "a"},
+			bson.M{"k": "b"},
+			bson.M{"k": "a"},
+		},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pull": bson.M{
+				"foo": bson.M{"k": "a"},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{bson.M{"k": "b"}},
+		}))
+	})
+
+	// no match leaves the array alone
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pull": bson.M{
+				"foo": "z",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b"},
+		}))
+	})
+}

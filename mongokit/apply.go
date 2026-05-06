@@ -27,6 +27,7 @@ func init() {
 	FieldUpdateOperators["$currentDate"] = applyCurrentDate
 	FieldUpdateOperators["$push"] = applyPush
 	FieldUpdateOperators["$pop"] = applyPop
+	FieldUpdateOperators["$pull"] = applyPull
 }
 
 // Changes record the applied changes to a document.
@@ -413,4 +414,78 @@ func applyPop(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) er
 	}
 
 	return nil
+}
+
+// pullMatches reports whether element matches the $pull condition. The
+// condition can be a query expression (a document where every top-level key
+// is an operator like $gte), a query against an embedded subdocument, or a
+// scalar value compared by equality.
+func pullMatches(element, condition interface{}) (bool, error) {
+	if cd, ok := condition.(bson.D); ok {
+		// distinguish element-level expression (all $-prefixed keys) from a
+		// query against the element as a subdocument
+		allOps := len(cd) > 0
+		for _, e := range cd {
+			if len(e.Key) == 0 || e.Key[0] != '$' {
+				allOps = false
+				break
+			}
+		}
+		if allOps {
+			virtual := bson.D{{Key: "_x", Value: element}}
+			query := bson.D{{Key: "_x", Value: cd}}
+			return Match(&virtual, &query)
+		}
+
+		// non-document elements never match a subdocument query
+		ed, ok := element.(bson.D)
+		if !ok {
+			return false, nil
+		}
+		return Match(&ed, &cd)
+	}
+
+	// equality match
+	return bsonkit.Compare(element, condition) == 0, nil
+}
+
+func applyPull(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
+	// get target field
+	field := bsonkit.Get(doc, path)
+	if field == bsonkit.Missing {
+		return nil
+	}
+	arr, ok := field.(bson.A)
+	if !ok {
+		return fmt.Errorf("%s: target field must be an array", name)
+	}
+
+	// build new array, dropping matching elements
+	result := make(bson.A, 0, len(arr))
+	removed := false
+	for _, item := range arr {
+		match, err := pullMatches(item, v)
+		if err != nil {
+			return err
+		}
+		if match {
+			removed = true
+			continue
+		}
+		result = append(result, item)
+	}
+
+	// no-op if nothing was removed
+	if !removed {
+		return nil
+	}
+
+	// store new array
+	_, err := bsonkit.Put(doc, path, result, false)
+	if err != nil {
+		return err
+	}
+
+	// record change
+	return ctx.Value.(*Changes).Record(path, result)
 }
