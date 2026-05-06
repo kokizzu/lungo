@@ -262,30 +262,20 @@ func matchExists(_ Context, doc bsonkit.Doc, _, path string, v interface{}) erro
 
 func matchType(_ Context, doc bsonkit.Doc, name, path string, v interface{}) error {
 	// TODO: Support type arrays.
-	// TODO: Support array values.
 
-	// check value type
+	// resolve the requested type once, before unwinding
+	var matchNumberClass bool
+	var wantType bsontype.Type
 	switch value := v.(type) {
 	case string:
-		// handle number
 		if value == "number" {
-			class, _ := bsonkit.Inspect(bsonkit.Get(doc, path))
-			if class == bsonkit.Number {
-				return nil
+			matchNumberClass = true
+		} else {
+			vt, ok := bsonkit.Alias2Type[value]
+			if !ok {
+				return fmt.Errorf("%s: unknown type string", name)
 			}
-			return ErrNotMatched
-		}
-
-		// check type string
-		vt, ok := bsonkit.Alias2Type[value]
-		if !ok {
-			return fmt.Errorf("%s: unknown type string", name)
-		}
-
-		// match type string
-		_, typ := bsonkit.Inspect(bsonkit.Get(doc, path))
-		if vt == typ {
-			return nil
+			wantType = vt
 		}
 	case int32, int64, float64:
 		// coerce to integer; reject fractional or out-of-range values
@@ -304,23 +294,26 @@ func matchType(_ Context, doc bsonkit.Doc, name, path string, v interface{}) err
 		if n < 0 || n > 0xFF {
 			return fmt.Errorf("%s: type number out of range", name)
 		}
-
-		// check type number
 		vt, ok := bsonkit.Number2Type[byte(n)]
 		if !ok {
 			return fmt.Errorf("%s: unknown type number", name)
 		}
-
-		// match type number
-		_, typ := bsonkit.Inspect(bsonkit.Get(doc, path))
-		if vt == typ {
-			return nil
-		}
+		wantType = vt
 	default:
 		return fmt.Errorf("%s: expected string or number", name)
 	}
 
-	return ErrNotMatched
+	return matchUnwind(doc, path, true, false, func(field interface{}) error {
+		class, typ := bsonkit.Inspect(field)
+		if matchNumberClass {
+			if class == bsonkit.Number {
+				return nil
+			}
+		} else if wantType == typ {
+			return nil
+		}
+		return ErrNotMatched
+	})
 }
 
 func matchJSONSchema(_ Context, doc bsonkit.Doc, name, _ string, v interface{}) error {

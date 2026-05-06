@@ -903,6 +903,25 @@ func TestMatchType(t *testing.T) {
 		}, false)
 	})
 
+	// $type traversing arrays of subdocuments
+	matchTest(t, bson.M{
+		"items": bson.A{
+			bson.M{"v": "x"},
+			bson.M{"v": int32(7)},
+		},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"items.v": bson.M{"$type": "string"},
+		}, true)
+		fn(bson.M{
+			"items.v": bson.M{"$type": "int"},
+		}, true)
+		fn(bson.M{
+			"items.v": bson.M{"$type": "double"},
+		}, false)
+	})
+}
+
 func TestMatchNeArray(t *testing.T) {
 	// $ne against an array field must use universal-quantifier semantics:
 	// match only when no element equals the operand
