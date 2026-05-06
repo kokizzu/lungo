@@ -149,7 +149,10 @@ func (b *Bucket) EnableTracking() {
 func (b *Bucket) Delete(ctx context.Context, id interface{}) error {
 	// just ensure marker if tracked
 	if b.tracked {
-		_, err := b.markers.ReplaceOne(ctx, &BucketMarker{
+		_, err := b.markers.ReplaceOne(ctx, bson.M{
+			"files_id": id,
+		}, &BucketMarker{
+			ID:        primitive.NewObjectID(),
 			File:      id,
 			State:     BucketMarkerStateDeleted,
 			Timestamp: time.Now(),

@@ -561,7 +561,13 @@ func TestBucketTracking(t *testing.T) {
 		assert.NoError(t, err)
 
 		buf.Reset()
-		n, err = b.DownloadToStreamByName(nil, "bar", &buf)
+		n, err = b.DownloadToStream(nil, id, &buf)
+		assert.Equal(t, ErrFileNotFound, err)
+		assert.Zero(t, n)
+		assert.Empty(t, buf.String())
+
+		buf.Reset()
+		n, err = b.DownloadToStreamByName(nil, "foo", &buf)
 		assert.Equal(t, ErrFileNotFound, err)
 		assert.Zero(t, n)
 		assert.Empty(t, buf.String())
