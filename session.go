@@ -134,15 +134,10 @@ func (s *Session) OperationTime() *primitive.Timestamp {
 
 // StartTransaction implements the ISession.StartTransaction method.
 func (s *Session) StartTransaction(opts ...*options.TransactionOptions) error {
-	// acquire lock
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	return s.startTransaction(nil, opts...)
+}
 
-	// check if ended
-	if s.ended {
-		return ErrSessionEnded
-	}
-
+func (s *Session) startTransaction(ctx context.Context, opts ...*options.TransactionOptions) error {
 	// merge options
 	opt := options.MergeTransactionOptions(opts...)
 
@@ -154,18 +149,33 @@ func (s *Session) StartTransaction(opts ...*options.TransactionOptions) error {
 		"MaxCommitTime":  ignored,
 	})
 
-	// check transaction
+	// check session state under the lock; release before calling engine.Begin
+	// because Begin reads sess.Transaction() under e.mutex and would otherwise
+	// deadlock against this lock
+	s.mutex.Lock()
+	if s.ended {
+		s.mutex.Unlock()
+		return ErrSessionEnded
+	}
 	if s.txn != nil {
+		s.mutex.Unlock()
 		return fmt.Errorf("existing transaction")
 	}
+	s.mutex.Unlock()
 
 	// create transaction
-	txn, err := s.engine.Begin(nil, true)
+	txn, err := s.engine.Begin(ctx, true)
 	if err != nil {
 		return err
 	}
 
-	// set transaction
+	// store transaction; if the session was concurrently ended, abort
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.ended {
+		s.engine.Abort(txn)
+		return ErrSessionEnded
+	}
 	s.txn = txn
 
 	return nil
@@ -186,8 +196,9 @@ func (s *Session) WithTransaction(ctx context.Context, fn func(ISessionContext) 
 		"MaxCommitTime":  ignored,
 	})
 
-	// start transaction
-	err := s.StartTransaction(opt)
+	// start transaction with the caller's context so a stuck token
+	// acquisition can be canceled
+	err := s.startTransaction(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
