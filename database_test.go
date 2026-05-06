@@ -84,6 +84,23 @@ func TestDatabaseListCollectionsAndNames(t *testing.T) {
 	})
 }
 
+// ListCollectionNames must return collections in deterministic (sorted) order.
+func TestDatabaseListCollectionNamesSorted(t *testing.T) {
+	databaseTest(t, func(t *testing.T, d IDatabase) {
+		// create a few collections in a non-alphabetic order
+		for _, name := range []string{"sort-c", "sort-a", "sort-b"} {
+			_, err := d.Collection(name).InsertOne(nil, bson.M{"x": 1})
+			assert.NoError(t, err)
+		}
+
+		names, err := d.ListCollectionNames(nil, bson.M{
+			"name": bson.M{"$in": bson.A{"sort-a", "sort-b", "sort-c"}},
+		})
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"sort-a", "sort-b", "sort-c"}, names)
+	})
+}
+
 func TestDatabaseName(t *testing.T) {
 	databaseTest(t, func(t *testing.T, d IDatabase) {
 		assert.Equal(t, testDB, d.Name())
