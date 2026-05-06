@@ -148,12 +148,25 @@ func (e *Engine) Begin(ctx context.Context, lock bool) (*Transaction, error) {
 		}
 	}
 
-	// acquire token (without lock)
+	// acquire token (without lock); use a tomb-aware context so that a shutdown
+	// unblocks the acquisition
 	e.mutex.Unlock()
-	ok = e.token.Acquire(ctx.Done(), time.Minute)
+	ok = e.token.Acquire(e.tomb.Context(ctx).Done(), time.Minute)
 	e.mutex.Lock()
 	if !ok {
+		if !e.tomb.Alive() {
+			return nil, ErrEngineClosed
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		return nil, fmt.Errorf("token acquisition timeout")
+	}
+
+	// engine may have closed while we waited
+	if !e.tomb.Alive() {
+		e.token.Release()
+		return nil, ErrEngineClosed
 	}
 
 	// assert transaction
@@ -347,10 +360,10 @@ func (e *Engine) Watch(handle Handle, pipeline bsonkit.List, resumeAfter, startA
 func (e *Engine) Close() {
 	// acquire lock
 	e.mutex.Lock()
-	defer e.mutex.Unlock()
 
 	// check if closed
 	if !e.tomb.Alive() {
+		e.mutex.Unlock()
 		return
 	}
 
@@ -359,8 +372,12 @@ func (e *Engine) Close() {
 		close(stream.signal)
 	}
 
-	// kill tomb
+	// kill the tomb under the mutex, then release it so that in-flight Begin
+	// calls can re-acquire the mutex and observe the dead tomb
 	e.tomb.Kill(nil)
+	e.mutex.Unlock()
+
+	// await goroutine termination
 	_ = e.tomb.Wait()
 }
 

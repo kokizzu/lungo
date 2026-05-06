@@ -199,3 +199,17 @@ func methods(t reflect.Type, replacements map[string]string, skip ...string) []s
 
 	return list
 }
+
+func runWithin(t *testing.T, d time.Duration, msg string, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		fn()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(d):
+		t.Fatal(msg)
+	}
+}
