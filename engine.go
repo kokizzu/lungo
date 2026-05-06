@@ -310,21 +310,22 @@ func (e *Engine) Watch(handle Handle, pipeline bsonkit.List, resumeAfter, startA
 		}
 	}
 
-	// start at
+	// start at: deliver events with clusterTime at or after the given
+	// timestamp; the supplied timestamp need not match an existing event
 	if startAt != nil {
-		resumed := false
+		// position last just before the first event at-or-after startAt; if
+		// every event is older than startAt, leave last at the newest entry
+		// (the stream then waits for future events)
 		for i, event := range oplog.List {
 			res := bsonkit.Compare(*startAt, bsonkit.Get(event, "clusterTime"))
-			if res == 0 {
-				if i > 0 {
+			if res <= 0 {
+				if i == 0 {
+					last = nil
+				} else {
 					last = oplog.List[i-1]
-					resumed = true
 				}
 				break
 			}
-		}
-		if !resumed {
-			return nil, fmt.Errorf("unable to resume change stream")
 		}
 	}
 

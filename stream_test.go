@@ -752,6 +752,31 @@ func TestStreamResumption(t *testing.T) {
 	})
 }
 
+func TestStreamStartAtNonMatchingTimestamp(t *testing.T) {
+	c := testLungoClient.Database(testDB).Collection(collectionName())
+
+	_, err := c.InsertOne(nil, bson.M{"foo": "bar"})
+	assert.NoError(t, err)
+
+	// pick a timestamp far in the past that does not match any oplog entry
+	ancient := primitive.Timestamp{T: 1, I: 1}
+
+	stream, err := c.Watch(nil, bson.A{}, options.ChangeStream().SetStartAtOperationTime(&ancient))
+	assert.NoError(t, err)
+	assert.NotNil(t, stream)
+
+	ret := stream.TryNext(nil)
+	assert.True(t, ret)
+
+	var event bson.M
+	err = stream.Decode(&event)
+	assert.NoError(t, err)
+	assert.Equal(t, "insert", event["operationType"])
+
+	err = stream.Close(nil)
+	assert.NoError(t, err)
+}
+
 func TestStreamInvalidationCollection(t *testing.T) {
 	collectionTest(t, func(t *testing.T, c ICollection) {
 		_, err := c.InsertOne(nil, bson.M{})
