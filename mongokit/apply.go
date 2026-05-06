@@ -330,7 +330,7 @@ func applyCurrentDate(ctx Context, doc bsonkit.Doc, name, path string, v interfa
 	}
 
 	// check document
-	if len(args) > 1 || args[0].Key != "$type" {
+	if len(args) != 1 || args[0].Key != "$type" {
 		return fmt.Errorf("%s: expected document with a single $type field", name)
 	}
 

@@ -840,6 +840,13 @@ func TestApplyCurrentDate(t *testing.T) {
 			},
 		}, nil, "$currentDate: expected document with a single $type field")
 
+		// empty document
+		fn(bson.M{
+			"$currentDate": bson.M{
+				"foo": bson.M{},
+			},
+		}, nil, "$currentDate: expected document with a single $type field")
+
 		// invalid type
 		fn(bson.M{
 			"$currentDate": bson.M{
