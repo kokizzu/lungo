@@ -637,6 +637,71 @@ func TestBucketUploadResuming(t *testing.T) {
 	})
 }
 
+func TestBucketUploadResumingMultiChunk(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		b.EnableTracking()
+
+		id := primitive.NewObjectID()
+		opt := options.GridFSUpload().SetChunkSizeBytes(2)
+
+		stream, err := b.OpenUploadStreamWithID(nil, id, "foo", opt)
+		assert.NoError(t, err)
+
+		// write 4 chunks worth of data
+		_, err = stream.Write([]byte("ABCDEFGH"))
+		assert.NoError(t, err)
+
+		n, err := stream.Suspend()
+		assert.NoError(t, err)
+		assert.Equal(t, int64(8), n)
+
+		stream, err = b.OpenUploadStreamWithID(nil, id, "foo", opt)
+		assert.NoError(t, err)
+
+		n, err = stream.Resume()
+		assert.NoError(t, err)
+		assert.Equal(t, int64(8), n)
+
+		_, err = stream.Write([]byte("IJ"))
+		assert.NoError(t, err)
+
+		err = stream.Close()
+		assert.NoError(t, err)
+
+		err = b.ClaimUpload(nil, id)
+		assert.NoError(t, err)
+
+		var buf bytes.Buffer
+		_, err = b.DownloadToStream(nil, id, &buf)
+		assert.NoError(t, err)
+		assert.Equal(t, "ABCDEFGHIJ", buf.String())
+	})
+}
+
+func TestBucketTrackedEmptyUpload(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		b.EnableTracking()
+
+		id := primitive.NewObjectID()
+		stream, err := b.OpenUploadStreamWithID(nil, id, "foo")
+		assert.NoError(t, err)
+
+		// no Write — Close immediately
+		err = stream.Close()
+		assert.NoError(t, err)
+
+		// claim and read back: should be empty but present
+		err = b.ClaimUpload(nil, id)
+		assert.NoError(t, err)
+
+		var buf bytes.Buffer
+		n, err := b.DownloadToStream(nil, id, &buf)
+		assert.NoError(t, err)
+		assert.Zero(t, n)
+		assert.Empty(t, buf.String())
+	})
+}
+
 func TestBucketTransaction(t *testing.T) {
 	collectionTest(t, func(t *testing.T, c ICollection) {
 		sess, err := c.Database().Client().StartSession()

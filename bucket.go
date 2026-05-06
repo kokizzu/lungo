@@ -766,7 +766,7 @@ func (s *UploadStream) Resume() (int64, error) {
 	defer csr.Close(s.context)
 
 	// prepare counters
-	var number int
+	var expected int
 	var length int
 
 	// check all chunks
@@ -779,12 +779,12 @@ func (s *UploadStream) Resume() (int64, error) {
 		}
 
 		// check chunk
-		if chunk.Num != number || len(chunk.Data) != s.chunkSize {
+		if chunk.Num != expected || len(chunk.Data) != s.chunkSize {
 			return 0, fmt.Errorf("found invalid chunk")
 		}
 
-		// increment
-		number = chunk.Num
+		// advance to the next expected chunk number
+		expected++
 		length += len(chunk.Data)
 	}
 
@@ -794,8 +794,8 @@ func (s *UploadStream) Resume() (int64, error) {
 		return 0, err
 	}
 
-	// set state
-	s.chunks = number + 1
+	// set state (expected equals the count of valid chunks seen)
+	s.chunks = expected
 	s.length = length
 
 	return int64(length), nil
@@ -886,8 +886,9 @@ func (s *UploadStream) Close() error {
 		return gridfs.ErrStreamClosed
 	}
 
-	// upload buffered data
-	if s.bufLen > 0 {
+	// upload buffered data; also runs in tracked mode with an empty buffer to
+	// ensure a marker has been created
+	if s.bufLen > 0 || (s.bucket.tracked && s.marker == nil) {
 		err := s.upload(true)
 		if err != nil {
 			return err
@@ -1029,10 +1030,13 @@ func (s *UploadStream) upload(final bool) error {
 		}
 	}
 
-	// write chunks
-	_, err := s.bucket.chunks.InsertMany(s.context, chunks)
-	if err != nil {
-		return err
+	// write chunks (skip when there is nothing to flush, e.g. close on an
+	// empty stream or a partial buffer that should be retained)
+	if len(chunks) > 0 {
+		_, err := s.bucket.chunks.InsertMany(s.context, chunks)
+		if err != nil {
+			return err
+		}
 	}
 
 	// get remaining bytes
