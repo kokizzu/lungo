@@ -135,6 +135,26 @@ func TestProject(t *testing.T) {
 		})
 	})
 
+	// boolean true/false are equivalent to numeric 1/0
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": "bar",
+		"bar": "baz",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": true,
+		}, bson.M{
+			"_id": id,
+			"foo": "bar",
+		})
+		fn(bson.M{
+			"foo": false,
+		}, bson.M{
+			"_id": id,
+			"bar": "baz",
+		})
+	})
+
 	// TODO: Test allowed mixing with _id.
 
 	// mixed projection

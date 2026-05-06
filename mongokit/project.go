@@ -114,17 +114,28 @@ func projectCondition(ctx Context, _ bsonkit.Doc, _, path string, v interface{})
 	// get state
 	state := ctx.Value.(*projectState)
 
-	// handle inclusion or exclusion
-	if bsonkit.Compare(v, int64(1)) == 0 {
-		state.include = append(state.include, path)
-	} else if bsonkit.Compare(v, int64(0)) == 0 {
-		if path == "_id" {
-			state.hideID = true
+	// determine inclusion or exclusion (accept both numeric 0/1 and bool)
+	var include bool
+	switch b := v.(type) {
+	case bool:
+		include = b
+	default:
+		if bsonkit.Compare(v, int64(1)) == 0 {
+			include = true
+		} else if bsonkit.Compare(v, int64(0)) == 0 {
+			include = false
 		} else {
-			state.exclude = append(state.exclude, path)
+			return fmt.Errorf("invalid projection argument %+v", v)
 		}
+	}
+
+	// handle inclusion or exclusion
+	if include {
+		state.include = append(state.include, path)
+	} else if path == "_id" {
+		state.hideID = true
 	} else {
-		return fmt.Errorf("invalid projection argument %+v", v)
+		state.exclude = append(state.exclude, path)
 	}
 
 	return nil
