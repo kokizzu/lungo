@@ -332,7 +332,7 @@ func compareInt64ToFloat64(l int64, r float64) int {
 
 	// define constants
 	const maxPreciseFloat64 = int64(1 << 53)
-	const boundOfLongRange = float64(2 << 63)
+	const boundOfLongRange = float64(1 << 63)
 
 	// non-numbers are always smaller
 	if math.IsNaN(r) {
