@@ -276,7 +276,7 @@ func compareRegexes(lv, rv interface{}) int {
 
 	// compare patterns
 	ret := strings.Compare(l.Pattern, r.Pattern)
-	if ret > 0 {
+	if ret != 0 {
 		return ret
 	}
 
