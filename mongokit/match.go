@@ -223,10 +223,20 @@ func matchNin(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) er
 }
 
 func matchExists(_ Context, doc bsonkit.Doc, _, path string, v interface{}) error {
-	// get boolean
+	// evaluate truthiness MongoDB-style: false, null and any numeric zero
+	// are falsy; everything else is truthy
 	exists := true
-	if b, ok := v.(bool); ok {
-		exists = b
+	switch n := v.(type) {
+	case bool:
+		exists = n
+	case nil:
+		exists = false
+	case int32:
+		exists = n != 0
+	case int64:
+		exists = n != 0
+	case float64:
+		exists = n != 0
 	}
 
 	// get field value

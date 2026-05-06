@@ -820,6 +820,27 @@ func TestMatchExists(t *testing.T) {
 		fn(bson.M{
 			"bar": bson.M{"$exists": false},
 		}, true)
+
+		// numeric zero (truthiness: falsy → equivalent to false)
+		fn(bson.M{
+			"foo": bson.M{"$exists": int32(0)},
+		}, false)
+		fn(bson.M{
+			"bar": bson.M{"$exists": int32(0)},
+		}, true)
+
+		// numeric one (truthiness: truthy → equivalent to true)
+		fn(bson.M{
+			"foo": bson.M{"$exists": int32(1)},
+		}, true)
+		fn(bson.M{
+			"bar": bson.M{"$exists": int32(1)},
+		}, false)
+
+		// null value (falsy)
+		fn(bson.M{
+			"foo": bson.M{"$exists": nil},
+		}, false)
 	})
 }
 
