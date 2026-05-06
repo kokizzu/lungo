@@ -574,6 +574,26 @@ func TestBucketTracking(t *testing.T) {
 	})
 }
 
+func TestBucketCleanupStaleUpload(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		b.EnableTracking()
+
+		id, err := b.UploadFromStream(nil, "foo", strings.NewReader("Hello World!"))
+		assert.NoError(t, err)
+		assert.NotEmpty(t, id)
+
+		// upload completed but never claimed → marker is in "uploaded" state
+		err = b.Cleanup(nil, 0)
+		assert.NoError(t, err)
+
+		// the unclaimed file must be gone
+		var buf bytes.Buffer
+		n, err := b.DownloadToStream(nil, id, &buf)
+		assert.Equal(t, ErrFileNotFound, err)
+		assert.Zero(t, n)
+	})
+}
+
 func TestBucketUploadResuming(t *testing.T) {
 	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
 		b.EnableTracking()

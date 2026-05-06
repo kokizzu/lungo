@@ -513,7 +513,9 @@ func (b *Bucket) Cleanup(ctx context.Context, age time.Duration) error {
 				"_id":   marker.ID,
 				"state": marker.State,
 			}, bson.M{
-				"state": BucketMarkerStateDeleted,
+				"$set": bson.M{
+					"state": BucketMarkerStateDeleted,
+				},
 			})
 			if err != nil {
 				return err
