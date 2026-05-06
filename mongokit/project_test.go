@@ -119,6 +119,22 @@ func TestProject(t *testing.T) {
 		})
 	})
 
+	// exclude multiple fields
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": "bar",
+		"bar": "baz",
+		"qux": "quux",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": 0,
+			"bar": 0,
+		}, bson.M{
+			"_id": id,
+			"qux": "quux",
+		})
+	})
+
 	// TODO: Test allowed mixing with _id.
 
 	// mixed projection

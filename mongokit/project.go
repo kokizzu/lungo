@@ -141,7 +141,7 @@ func projectCondition(ctx Context, _ bsonkit.Doc, _, path string, v interface{})
 		if path == "_id" {
 			state.hideID = true
 		} else {
-			state.exclude = append(state.include, path)
+			state.exclude = append(state.exclude, path)
 		}
 	} else {
 		return fmt.Errorf("invalid projection argument %+v", v)
