@@ -195,8 +195,11 @@ func (e *Engine) Commit(txn *Transaction) error {
 	}
 
 	// check transaction
+	if e.txn == nil {
+		return fmt.Errorf("no active transaction")
+	}
 	if e.txn != txn {
-		return fmt.Errorf("existing transaction")
+		return fmt.Errorf("transaction mismatch")
 	}
 
 	// ensure token is released
