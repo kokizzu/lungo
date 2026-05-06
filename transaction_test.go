@@ -115,3 +115,28 @@ func TestTransactionOplogCleaningByTime(t *testing.T) {
 	assert.Empty(t, txn.Catalog().Namespaces[Oplog].Documents.List)
 
 }
+
+func TestTransactionOplogCleaningMultiDrop(t *testing.T) {
+	txn := NewTransaction(NewCatalog())
+
+	id := primitive.NewObjectID()
+	_, err := txn.Insert(Handle{"foo", "bar"}, bsonkit.List{
+		bsonkit.MustConvert(bson.M{"_id": id, "n": 0}),
+	}, true)
+	assert.NoError(t, err)
+
+	for n := 1; n <= 5; n++ {
+		_, err = txn.Update(Handle{"foo", "bar"}, bsonkit.MustConvert(bson.M{
+			"_id": id,
+		}), nil, bsonkit.MustConvert(bson.M{
+			"$set": bson.M{"n": n},
+		}), 0, 0, false, nil)
+		assert.NoError(t, err)
+	}
+
+	assert.Len(t, txn.Catalog().Namespaces[Oplog].Documents.List, 6)
+
+	// keep only 1 by size; minAge=0 disables the age guard
+	txn.Clean(0, 1, 0, time.Hour)
+	assert.Len(t, txn.Catalog().Namespaces[Oplog].Documents.List, 1)
+}

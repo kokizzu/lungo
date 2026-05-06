@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/256dpi/lungo/bsonkit"
 	"github.com/256dpi/lungo/mongokit"
@@ -1026,36 +1027,41 @@ func (t *Transaction) Clean(minSize, maxSize int, minAge, maxAge time.Duration) 
 	oplog := clone.Namespaces[Oplog].Clone()
 	clone.Namespaces[Oplog] = oplog
 
-	// get timestamps
-	minTimestamp := bsonkit.Now()
-	maxTimestamp := bsonkit.Now()
-	minTimestamp.T -= uint32(minAge / time.Second)
-	maxTimestamp.T -= uint32(maxAge / time.Second)
+	// derive age cutoffs with second precision
+	now := bsonkit.Now()
+	minTimestamp := primitive.Timestamp{T: now.T - uint32(minAge/time.Second)}
+	maxTimestamp := primitive.Timestamp{T: now.T - uint32(maxAge/time.Second), I: now.I}
 
 	// determine indexes
 	minIndex := len(oplog.Documents.List) - minSize
 	maxIndex := len(oplog.Documents.List) - maxSize
 
-	// prepare counter
+	// determine how many events from the start should be dropped (events are
+	// ordered chronologically, so we drop a contiguous prefix). A zero age
+	// disables the corresponding age clause, so size-only cleanup still works
 	dropped := 0
-
-	// drop events based on threshold and timestamp, break if none have been
-	// deleted
 	for i, doc := range oplog.Documents.List {
 		// get timestamp
 		ts := bsonkit.Get(doc, "_id.ts")
 
-		// determine inclusion
-		afterMin := i < minIndex && bsonkit.Compare(ts, minTimestamp) < 0
+		// willing to drop: past the minSize keep-zone and (no age guard or
+		// the event is older than minAge)
+		afterMin := i < minIndex && (minAge == 0 || bsonkit.Compare(ts, minTimestamp) < 0)
+
+		// forced to drop: past the maxSize boundary or older than maxAge
 		beyondMax := i < maxIndex || bsonkit.Compare(ts, maxTimestamp) < 0
 
-		// remove event if below threshold or timestamp
-		if afterMin && beyondMax {
-			oplog.Documents.Remove(doc)
-			dropped++
-		} else {
+		// only drop when both willing and forced; events are chronologically
+		// ordered, so the first non-droppable event ends the prefix
+		if !(afterMin && beyondMax) {
 			break
 		}
+		dropped++
+	}
+
+	// remove the prefix in one pass
+	for i := 0; i < dropped; i++ {
+		oplog.Documents.Remove(oplog.Documents.List[0])
 	}
 
 	// set flag
