@@ -45,6 +45,13 @@ func (s *Stream) Close(context.Context) error {
 	s.closed = true
 	s.error = nil
 
+	// wake up any goroutine blocked in next() (non-blocking send so we don't
+	// stall when the buffered signal slot is already full)
+	select {
+	case s.signal <- struct{}{}:
+	default:
+	}
+
 	return nil
 }
 
@@ -120,32 +127,33 @@ func (s *Stream) TryNext(ctx context.Context) bool {
 }
 
 func (s *Stream) next(ctx context.Context, block bool) bool {
-	// acquire mutex
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	// check validity
-	if s.error != nil || s.closed {
-		return false
-	}
-
-	// check if dropped
-	if s.dropped {
-		s.event = bsonkit.MustConvert(bson.M{
-			"_id":           bson.M{"ts": "drop"},
-			"operationType": "invalidate",
-			"clusterTime":   bsonkit.Now(),
-		})
-		s.token = bsonkit.Get(s.event, "_id")
-		s.cancel()
-		s.closed = true
-		return true
-	}
-
 	// ensure context
 	ctx = ensureContext(ctx)
 
 	for {
+		// acquire mutex
+		s.mutex.Lock()
+
+		// check validity
+		if s.error != nil || s.closed {
+			s.mutex.Unlock()
+			return false
+		}
+
+		// check if dropped
+		if s.dropped {
+			s.event = bsonkit.MustConvert(bson.M{
+				"_id":           bson.M{"ts": "drop"},
+				"operationType": "invalidate",
+				"clusterTime":   bsonkit.Now(),
+			})
+			s.token = bsonkit.Get(s.event, "_id")
+			s.cancel()
+			s.closed = true
+			s.mutex.Unlock()
+			return true
+		}
+
 		// get oplog
 		oplog := s.oplog()
 
@@ -157,6 +165,7 @@ func (s *Stream) next(ctx context.Context, block bool) bool {
 				s.cancel()
 				s.closed = true
 				s.error = ErrLostOplogPosition
+				s.mutex.Unlock()
 				return false
 			}
 			index = i
@@ -176,9 +185,11 @@ func (s *Stream) next(ctx context.Context, block bool) bool {
 			// match database and collection
 			if s.handle[0] != "" && s.handle[0] != nsDB {
 				s.last = event
+				s.mutex.Unlock()
 				continue
 			} else if s.handle[1] != "" && s.handle[1] != nsColl {
 				s.last = event
+				s.mutex.Unlock()
 				continue
 			}
 
@@ -195,37 +206,42 @@ func (s *Stream) next(ctx context.Context, block bool) bool {
 			s.last = event
 			s.event = event
 			s.token = token
-
+			s.mutex.Unlock()
 			return true
 		}
 
 		// handle non blocking
 		if !block {
-			select {
-			case <-ctx.Done():
-				// set error
-				s.error = ctx.Err()
-
-				return false
-			default:
-				return false
+			if err := ctx.Err(); err != nil {
+				s.error = err
 			}
+			s.mutex.Unlock()
+			return false
 		}
+
+		// release the mutex while blocking so Close and other accessors can
+		// run concurrently with the wait
+		signal := s.signal
+		s.mutex.Unlock()
 
 		// await next event
 		select {
-		case _, ok := <-s.signal:
+		case _, ok := <-signal:
 			if !ok {
 				// close stream
+				s.mutex.Lock()
 				s.cancel()
 				s.closed = true
-
+				s.mutex.Unlock()
 				return false
 			}
 		case <-ctx.Done():
 			// set error
-			s.error = ctx.Err()
-
+			s.mutex.Lock()
+			if s.error == nil {
+				s.error = ctx.Err()
+			}
+			s.mutex.Unlock()
 			return false
 		}
 	}

@@ -592,6 +592,36 @@ func TestStreamAsync(t *testing.T) {
 	})
 }
 
+func TestStreamCloseUnblocksNext(t *testing.T) {
+	c := testLungoClient.Database(testDB).Collection(collectionName())
+
+	stream, err := c.Watch(nil, bson.A{})
+	assert.NoError(t, err)
+	assert.NotNil(t, stream)
+
+	// run Next in a goroutine; with no events it blocks in the wait loop
+	done := make(chan bool, 1)
+	go func() {
+		done <- stream.Next(nil)
+	}()
+
+	// give Next time to enter its blocking wait
+	time.Sleep(50 * time.Millisecond)
+
+	// Close from the main goroutine must complete promptly and unblock Next
+	runWithin(t, 2*time.Second, "Stream.Close deadlocked", func() {
+		err := stream.Close(nil)
+		assert.NoError(t, err)
+	})
+
+	select {
+	case ret := <-done:
+		assert.False(t, ret)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stream.Next never returned after Close")
+	}
+}
+
 func TestStreamResumption(t *testing.T) {
 	collectionTest(t, func(t *testing.T, c ICollection) {
 		/* invalid token and time */
