@@ -165,6 +165,11 @@ func applyRename(ctx Context, doc bsonkit.Doc, name, path string, v interface{})
 		return fmt.Errorf("%s: path cannot be an array", name)
 	}
 
+	// reject renames where source and target are identical
+	if path == newPath {
+		return fmt.Errorf("%s: source and target must differ", name)
+	}
+
 	// unset old value
 	value := bsonkit.Unset(doc, path)
 	if value == bsonkit.Missing {

@@ -565,6 +565,17 @@ func TestApplyRename(t *testing.T) {
 		}, nil, "$rename: path cannot be an array")
 	})
 
+	// source equals destination
+	applyTest(t, false, bson.M{
+		"foo": "bar",
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$rename": bson.M{
+				"foo": "foo",
+			},
+		}, nil, "$rename: source and target must differ")
+	})
+
 	// changes
 	changes, err := Apply(bsonkit.MustConvert(bson.M{
 		"foo": bson.M{

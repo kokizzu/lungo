@@ -284,19 +284,25 @@ func matchType(_ Context, doc bsonkit.Doc, name, path string, v interface{}) err
 			return nil
 		}
 	case int32, int64, float64:
-		// coerce number
-		var num byte
+		// coerce to integer; reject fractional or out-of-range values
+		var n int64
 		switch nn := v.(type) {
 		case int32:
-			num = byte(nn)
+			n = int64(nn)
 		case int64:
-			num = byte(nn)
+			n = nn
 		case float64:
-			num = byte(nn)
+			if nn != float64(int64(nn)) {
+				return fmt.Errorf("%s: expected integer", name)
+			}
+			n = int64(nn)
+		}
+		if n < 0 || n > 0xFF {
+			return fmt.Errorf("%s: type number out of range", name)
 		}
 
 		// check type number
-		vt, ok := bsonkit.Number2Type[num]
+		vt, ok := bsonkit.Number2Type[byte(n)]
 		if !ok {
 			return fmt.Errorf("%s: unknown type number", name)
 		}

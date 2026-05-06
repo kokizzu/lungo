@@ -82,6 +82,23 @@ func resolve(path string, query bsonkit.Doc, doc bson.D, arrayFilters bsonkit.Li
 		return nil
 	}
 
+	// verify that at least one supplied array filter binds the identifier
+	bound := false
+	for _, filter := range arrayFilters {
+		for _, e := range *filter {
+			if e.Key == identifier || strings.HasPrefix(e.Key, identifier+".") {
+				bound = true
+				break
+			}
+		}
+		if bound {
+			break
+		}
+	}
+	if !bound {
+		return fmt.Errorf("no array filter found for identifier %q", identifier)
+	}
+
 	// prepare builder
 	builder := bsonkit.NewPathBuilder(len(head) + 22 + len(tail))
 

@@ -222,6 +222,14 @@ func TestResolverErrors(t *testing.T) {
 	}), nil, nil)
 	assert.Error(t, err)
 	assert.Equal(t, `unknown positional operator "$foo"`, err.Error())
+
+	err = Resolve("bar.$[id]", nil, bsonkit.MustConvert(bson.M{
+		"bar": bson.A{1, 2, 3},
+	}), bsonkit.List{
+		bsonkit.MustConvert(bson.M{"other": bson.M{"$gt": 0}}),
+	}, nil)
+	assert.Error(t, err)
+	assert.Equal(t, `no array filter found for identifier "id"`, err.Error())
 }
 
 func BenchmarkResolve(b *testing.B) {

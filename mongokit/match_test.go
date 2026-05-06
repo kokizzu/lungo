@@ -858,7 +858,10 @@ func TestMatchType(t *testing.T) {
 		}, "$type: unknown type string")
 		fn(bson.M{
 			"foo": bson.M{"$type": int32(300)},
-		}, "$type: unknown type number")
+		}, "$type: type number out of range")
+		fn(bson.M{
+			"foo": bson.M{"$type": 1.5},
+		}, "$type: expected integer")
 
 		// string
 		fn(bson.M{
