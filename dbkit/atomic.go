@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // AtomicWriteFile reads from r and writes to the file named by path. To ensure
@@ -31,7 +32,7 @@ func AtomicWriteFile(path string, r io.Reader, mode os.FileMode) error {
 
 	// open temporary file
 	tempFile, err := os.OpenFile(tempPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
 		return fmt.Errorf("failed to create new temporary file %q: %v", tempPath, err)
 	}
 
@@ -43,7 +44,7 @@ func AtomicWriteFile(path string, r io.Reader, mode os.FileMode) error {
 
 	// write to temporary file
 	_, err = io.Copy(tempFile, r)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
 		return fmt.Errorf("failed to write temporary file %q: %v", tempPath, err)
 	}
 
@@ -63,6 +64,16 @@ func AtomicWriteFile(path string, r io.Reader, mode os.FileMode) error {
 	err = os.Rename(tempPath, path)
 	if err != nil {
 		return fmt.Errorf("failed to rename temporary file from %q to %q: %v", tempPath, path, err)
+	}
+
+	// fsync parent directory so the rename is durable across crashes
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("failed to open parent directory of %q: %v", path, err)
+	}
+	defer dir.Close()
+	if err := dir.Sync(); err != nil {
+		return fmt.Errorf("failed to sync parent directory of %q: %v", path, err)
 	}
 
 	return nil
