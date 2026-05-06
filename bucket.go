@@ -459,7 +459,7 @@ func (b *Bucket) ClaimUpload(ctx context.Context, id interface{}) error {
 	}
 
 	// remove upload marker
-	_, err = b.markers.DeleteOne(nil, bson.M{
+	_, err = b.markers.DeleteOne(ctx, bson.M{
 		"_id": marker.ID,
 	})
 	if err != nil {
