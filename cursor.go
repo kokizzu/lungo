@@ -107,6 +107,8 @@ func (c *Cursor) Next(context.Context) bool {
 
 // RemainingBatchLength implements the ICursor.RemainingBatchLength method.
 func (c *Cursor) RemainingBatchLength() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	return len(c.list) - c.pos
 }
 
