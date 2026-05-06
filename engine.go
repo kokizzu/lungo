@@ -81,6 +81,14 @@ func CreateEngine(opts Options) (*Engine, error) {
 		opts.MaxOplogAge = time.Hour
 	}
 
+	// validate oplog ages
+	const maxAge = 21 * 24 * time.Hour
+	if opts.MinOplogAge < 0 || opts.MinOplogAge > maxAge {
+		return nil, fmt.Errorf("invalid min oplog age: %s", opts.MinOplogAge)
+	} else if opts.MaxOplogAge < 0 || opts.MaxOplogAge > maxAge {
+		return nil, fmt.Errorf("invalid max oplog age: %s", opts.MaxOplogAge)
+	}
+
 	// create engine
 	e := &Engine{
 		opts:    opts,
