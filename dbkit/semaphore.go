@@ -23,10 +23,13 @@ func NewSemaphore(capacity int) *Semaphore {
 // Acquire will acquire a token from the semaphore. If the function returns
 // true the token must be released back to the semaphore exactly once.
 func (s *Semaphore) Acquire(cancel <-chan struct{}, timeout time.Duration) bool {
-	// prepare deadline
+	// prepare deadline; use NewTimer so it can be stopped on the success
+	// or cancel paths to avoid leaking timers
 	var deadline <-chan time.Time
 	if timeout > 0 {
-		deadline = time.After(timeout)
+		t := time.NewTimer(timeout)
+		defer t.Stop()
+		deadline = t.C
 	}
 
 	// await token, cancel or deadline
