@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/bsontype"
 
 	"github.com/256dpi/lungo/bsonkit"
 )
@@ -243,17 +244,22 @@ func matchExists(_ Context, doc bsonkit.Doc, _, path string, v interface{}) erro
 		exists = n != 0
 	}
 
-	// get field value
-	field := bsonkit.Get(doc, path)
-	if exists {
-		if field != bsonkit.Missing {
-			return nil
+	// collect values along the path; All traverses arrays of subdocs and
+	// drops Missing entries when compact is set, so a non-empty result means
+	// at least one element along the path produced a value
+	value, multi := bsonkit.All(doc, path, true, true)
+	found := false
+	if multi {
+		if arr, ok := value.(bson.A); ok {
+			found = len(arr) > 0
+		} else {
+			found = value != bsonkit.Missing
 		}
-
-		return ErrNotMatched
+	} else {
+		found = value != bsonkit.Missing
 	}
 
-	if field == bsonkit.Missing {
+	if exists == found {
 		return nil
 	}
 

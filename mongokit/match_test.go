@@ -936,6 +936,31 @@ func TestMatchNeArray(t *testing.T) {
 		}, true)
 	})
 }
+
+func TestMatchExistsArray(t *testing.T) {
+	// $exists must traverse arrays of subdocuments
+	matchTest(t, bson.M{
+		"items": bson.A{
+			bson.M{"v": int32(1)},
+			bson.M{"w": int32(2)},
+		},
+	}, func(fn func(bson.M, interface{})) {
+		// at least one element has v
+		fn(bson.M{
+			"items.v": bson.M{"$exists": true},
+		}, true)
+		// no element has q
+		fn(bson.M{
+			"items.q": bson.M{"$exists": true},
+		}, false)
+		// $exists:false is the negation
+		fn(bson.M{
+			"items.q": bson.M{"$exists": false},
+		}, true)
+		fn(bson.M{
+			"items.v": bson.M{"$exists": false},
+		}, false)
+	})
 }
 
 func TestMatchJSONSchema(t *testing.T) {
