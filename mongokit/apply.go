@@ -30,6 +30,7 @@ func init() {
 	FieldUpdateOperators["$pull"] = applyPull
 	FieldUpdateOperators["$pullAll"] = applyPullAll
 	FieldUpdateOperators["$addToSet"] = applyAddToSet
+	FieldUpdateOperators["$bit"] = applyBit
 }
 
 // Changes record the applied changes to a document.
@@ -540,4 +541,137 @@ func applyPullAll(ctx Context, doc bsonkit.Doc, name, path string, v interface{}
 
 	// record change
 	return ctx.Value.(*Changes).Record(path, result)
+}
+
+func applyAddToSet(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
+	// resolve values to add: $each unwraps to a list, anything else is a
+	// single value (which itself may be a document or array — those are
+	// treated as opaque values, just like $push)
+	var values bson.A
+	if vd, ok := v.(bson.D); ok && len(vd) == 1 && vd[0].Key == "$each" {
+		arr, ok := vd[0].Value.(bson.A)
+		if !ok {
+			return fmt.Errorf("%s: $each requires an array", name)
+		}
+		values = arr
+	} else {
+		values = bson.A{v}
+	}
+
+	// get current array; missing field becomes a new empty array
+	field := bsonkit.Get(doc, path)
+	var arr bson.A
+	if field == bsonkit.Missing {
+		arr = bson.A{}
+	} else {
+		var ok bool
+		arr, ok = field.(bson.A)
+		if !ok {
+			return fmt.Errorf("%s: target field must be an array", name)
+		}
+	}
+
+	// append unique values
+	changed := false
+	for _, val := range values {
+		found := false
+		for _, existing := range arr {
+			if bsonkit.Compare(existing, val) == 0 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			arr = append(arr, val)
+			changed = true
+		}
+	}
+
+	// no-op if nothing was added
+	if !changed {
+		return nil
+	}
+
+	// store new array
+	_, err := bsonkit.Put(doc, path, arr, false)
+	if err != nil {
+		return err
+	}
+
+	// record change
+	return ctx.Value.(*Changes).Record(path, arr)
+}
+
+func applyBit(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
+	// expect a document with a single op (and / or / xor)
+	spec, ok := v.(bson.D)
+	if !ok || len(spec) != 1 {
+		return fmt.Errorf("%s: expected document with a single bitwise op", name)
+	}
+	op := spec[0]
+
+	// extract operand as integer; track whether it's int64-wide
+	var operand int64
+	var operandIs64 bool
+	switch n := op.Value.(type) {
+	case int32:
+		operand = int64(n)
+	case int64:
+		operand = n
+		operandIs64 = true
+	default:
+		return fmt.Errorf("%s: operand must be integer", name)
+	}
+
+	// extract current field value as integer; missing is treated as 0 so the
+	// op can produce a fresh value (matching MongoDB semantics)
+	field := bsonkit.Get(doc, path)
+	var current int64
+	var fieldIs64 bool
+	switch n := field.(type) {
+	case int32:
+		current = int64(n)
+	case int64:
+		current = n
+		fieldIs64 = true
+	case bsonkit.MissingType:
+		// stays at zero
+	default:
+		return fmt.Errorf("%s: target field must be integer", name)
+	}
+
+	// compute result
+	var result int64
+	switch op.Key {
+	case "and":
+		result = current & operand
+	case "or":
+		result = current | operand
+	case "xor":
+		result = current ^ operand
+	default:
+		return fmt.Errorf("%s: unknown bitwise op %q", name, op.Key)
+	}
+
+	// preserve int32 width unless either side was int64
+	var resultVal interface{}
+	if fieldIs64 || operandIs64 {
+		resultVal = result
+	} else {
+		resultVal = int32(result)
+	}
+
+	// no-op if value would not change
+	if field != bsonkit.Missing && bsonkit.Compare(field, resultVal) == 0 {
+		return nil
+	}
+
+	// store new value
+	_, err := bsonkit.Put(doc, path, resultVal, false)
+	if err != nil {
+		return err
+	}
+
+	// record change
+	return ctx.Value.(*Changes).Record(path, resultVal)
 }

@@ -1254,3 +1254,66 @@ func TestApplyAddToSet(t *testing.T) {
 		})
 	})
 }
+
+func TestApplyBit(t *testing.T) {
+	// and
+	applyTest(t, false, bson.M{
+		"foo": int32(13),
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$bit": bson.M{
+				"foo": bson.M{"and": int32(10)},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": int32(8),
+		}))
+	})
+
+	// or
+	applyTest(t, false, bson.M{
+		"foo": int32(1),
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$bit": bson.M{
+				"foo": bson.M{"or": int32(2)},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": int32(3),
+		}))
+	})
+
+	// xor
+	applyTest(t, false, bson.M{
+		"foo": int32(5),
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$bit": bson.M{
+				"foo": bson.M{"xor": int32(3)},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": int32(6),
+		}))
+	})
+
+	// non-integer field rejected
+	applyTest(t, false, bson.M{
+		"foo": "bar",
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$bit": bson.M{
+				"foo": bson.M{"and": int32(1)},
+			},
+		}, nil, "$bit: target field must be integer")
+	})
+
+	// non-integer operand rejected
+	applyTest(t, false, bson.M{
+		"foo": int32(1),
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$bit": bson.M{
+				"foo": bson.M{"and": "x"},
+			},
+		}, nil, "$bit: operand must be integer")
+	})
+}
