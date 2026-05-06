@@ -34,7 +34,7 @@ func init() {
 	ExpressionQueryOperators["$lt"] = matchComp
 	ExpressionQueryOperators["$gte"] = matchComp
 	ExpressionQueryOperators["$lte"] = matchComp
-	ExpressionQueryOperators["$ne"] = matchComp
+	ExpressionQueryOperators["$ne"] = matchNe
 	ExpressionQueryOperators["$not"] = matchNot
 	ExpressionQueryOperators["$in"] = matchIn
 	ExpressionQueryOperators["$nin"] = matchNin
@@ -155,8 +155,6 @@ func matchComp(_ Context, doc bsonkit.Doc, op, path string, v interface{}) error
 			ok = comp && res < 0
 		case "$lte":
 			ok = comp && res <= 0
-		case "$ne":
-			ok = !comp || res != 0
 		default:
 			return fmt.Errorf("unknown comparison operator %q", op)
 		}
@@ -219,6 +217,12 @@ func matchIn(_ Context, doc bsonkit.Doc, name, path string, v interface{}) error
 func matchNin(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
 	return matchNegate(func() error {
 		return matchIn(ctx, doc, name, path, v)
+	})
+}
+
+func matchNe(ctx Context, doc bsonkit.Doc, _, path string, v interface{}) error {
+	return matchNegate(func() error {
+		return matchComp(ctx, doc, "$eq", path, v)
 	})
 }
 

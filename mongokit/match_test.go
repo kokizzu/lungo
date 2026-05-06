@@ -902,6 +902,21 @@ func TestMatchType(t *testing.T) {
 			"baz": bson.M{"type": "null"},
 		}, false)
 	})
+
+func TestMatchNeArray(t *testing.T) {
+	// $ne against an array field must use universal-quantifier semantics:
+	// match only when no element equals the operand
+	matchTest(t, bson.M{
+		"foo": bson.A{int32(1), int32(2), int32(3)},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$ne": int32(2)},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$ne": int32(9)},
+		}, true)
+	})
+}
 }
 
 func TestMatchJSONSchema(t *testing.T) {
