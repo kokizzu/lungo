@@ -902,6 +902,22 @@ func TestApplyCurrentDate(t *testing.T) {
 			"foo": changes.Changed["foo"],
 		},
 	}, changes)
+
+	// changes via $type form
+	changes, err = Apply(bsonkit.MustConvert(bson.M{
+		"foo": "bar",
+	}), nil, bsonkit.MustConvert(bson.M{
+		"$currentDate": bson.M{
+			"foo": bson.M{"$type": "date"},
+		},
+	}), false, nil)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, changes.Changed["foo"])
+	assert.Equal(t, &Changes{
+		Changed: map[string]interface{}{
+			"foo": changes.Changed["foo"],
+		},
+	}, changes)
 }
 
 func TestApplyPush(t *testing.T) {

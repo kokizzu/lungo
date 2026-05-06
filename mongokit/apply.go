@@ -347,7 +347,7 @@ func applyCurrentDate(ctx Context, doc bsonkit.Doc, name, path string, v interfa
 
 	// set value
 	_, err := bsonkit.Put(doc, path, now, false)
-	if err == nil {
+	if err != nil {
 		return err
 	}
 
