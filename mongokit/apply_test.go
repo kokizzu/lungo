@@ -997,6 +997,311 @@ func TestApplyPush(t *testing.T) {
 	}, changes)
 }
 
+func TestApplyPushEach(t *testing.T) {
+	// $each appends multiple values
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{"$each": bson.A{"b", "c", "d"}},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c", "d"},
+		}))
+	})
+
+	// $each on a missing field creates a new array
+	applyTest(t, false, bson.M{
+		"x": int32(1),
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{"$each": bson.A{"a", "b"}},
+			},
+		}, nil, func(t *testing.T, d bson.D) {
+			m := bson.M{}
+			for _, e := range d {
+				m[e.Key] = e.Value
+			}
+			assert.Equal(t, bson.M{"x": int32(1), "foo": bson.A{"a", "b"}}, m)
+		})
+	})
+
+	// empty $each is a no-op (and no error)
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{"$each": bson.A{}},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a"},
+		}))
+	})
+
+	// $each must be an array
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{"$each": "x"},
+			},
+		}, nil, "$push: $each requires an array")
+	})
+
+	// per-element change records for a pure $each append
+	changes, err := Apply(bsonkit.MustConvert(bson.M{
+		"foo": bson.A{"a"},
+	}), nil, bsonkit.MustConvert(bson.M{
+		"$push": bson.M{
+			"foo": bson.M{"$each": bson.A{"b", "c"}},
+		},
+	}), false, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, &Changes{
+		Upsert: false,
+		Changed: map[string]interface{}{
+			"foo.1": "b",
+			"foo.2": "c",
+		},
+	}, changes)
+}
+
+func TestApplyPushPosition(t *testing.T) {
+	// prepend
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"b", "c"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":     bson.A{"a"},
+					"$position": int32(0),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c"},
+		}))
+	})
+
+	// insert in middle
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "d"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":     bson.A{"b", "c"},
+					"$position": int32(1),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c", "d"},
+		}))
+	})
+
+	// negative position counts from end
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b", "c", "d"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":     bson.A{"x"},
+					"$position": int32(-1),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c", "x", "d"},
+		}))
+	})
+
+	// position past end clamps to end
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":     bson.A{"c"},
+					"$position": int32(100),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c"},
+		}))
+	})
+
+	// negative position past start clamps to 0
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":     bson.A{"x"},
+					"$position": int32(-100),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"x", "a", "b"},
+		}))
+	})
+}
+
+func TestApplyPushSlice(t *testing.T) {
+	// positive slice keeps the first N
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":  bson.A{"c", "d"},
+					"$slice": int32(3),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b", "c"},
+		}))
+	})
+
+	// negative slice keeps the last N (useful for ring buffers)
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b", "c"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":  bson.A{"d", "e"},
+					"$slice": int32(-3),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"c", "d", "e"},
+		}))
+	})
+
+	// $slice: 0 empties the array
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":  bson.A{"c"},
+					"$slice": int32(0),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{},
+		}))
+	})
+
+	// $slice larger than the resulting array is a no-op
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each":  bson.A{"b"},
+					"$slice": int32(10),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"a", "b"},
+		}))
+	})
+}
+
+func TestApplyPushSort(t *testing.T) {
+	// scalar ascending
+	applyTest(t, false, bson.M{
+		"foo": bson.A{int32(3), int32(1)},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each": bson.A{int32(2)},
+					"$sort": int32(1),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{int32(1), int32(2), int32(3)},
+		}))
+	})
+
+	// scalar descending
+	applyTest(t, false, bson.M{
+		"foo": bson.A{int32(3), int32(1)},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each": bson.A{int32(2)},
+					"$sort": int32(-1),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{int32(3), int32(2), int32(1)},
+		}))
+	})
+
+	// document sort by field
+	applyTest(t, false, bson.M{
+		"foo": bson.A{
+			bson.M{"score": int32(2)},
+			bson.M{"score": int32(5)},
+		},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"foo": bson.M{
+					"$each": bson.A{bson.M{"score": int32(1)}, bson.M{"score": int32(7)}},
+					"$sort": bson.M{"score": int32(1)},
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{
+				bson.D{{Key: "score", Value: int32(1)}},
+				bson.D{{Key: "score", Value: int32(2)}},
+				bson.D{{Key: "score", Value: int32(5)}},
+				bson.D{{Key: "score", Value: int32(7)}},
+			},
+		}))
+	})
+}
+
+func TestApplyPushCombined(t *testing.T) {
+	// classic capped-list pattern: append, sort by score desc, keep top N
+	applyTest(t, false, bson.M{
+		"scores": bson.A{
+			bson.M{"v": int32(50)},
+			bson.M{"v": int32(80)},
+		},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$push": bson.M{
+				"scores": bson.M{
+					"$each":  bson.A{bson.M{"v": int32(70)}, bson.M{"v": int32(90)}},
+					"$sort":  bson.M{"v": int32(-1)},
+					"$slice": int32(3),
+				},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"scores": bson.A{
+				bson.D{{Key: "v", Value: int32(90)}},
+				bson.D{{Key: "v", Value: int32(80)}},
+				bson.D{{Key: "v", Value: int32(70)}},
+			},
+		}))
+	})
+}
+
 func TestApplyPop(t *testing.T) {
 	// unsupported value
 	applyTest(t, false, bson.M{

@@ -2,6 +2,7 @@ package mongokit
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -369,24 +370,228 @@ func applyCurrentDate(ctx Context, doc bsonkit.Doc, name, path string, v interfa
 	return nil
 }
 
-func applyPush(ctx Context, doc bsonkit.Doc, _, path string, v interface{}) error {
-	// TODO: Add support for the modifiers {$each, $slice, $sort, $position}
-
-	// push value
-	res, err := bsonkit.Push(doc, path, v)
-	if err != nil {
-		return err
+func applyPush(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
+	// detect the modifier form: a document containing $each (any other shape,
+	// including a non-modifier document, is treated as a single value to push)
+	var values bson.A
+	var positionVal, sortVal, sliceVal interface{}
+	hasPosition, hasSort, hasSlice := false, false, false
+	modifierForm := false
+	if vd, ok := v.(bson.D); ok {
+		for _, e := range vd {
+			if e.Key == "$each" {
+				modifierForm = true
+				break
+			}
+		}
+	}
+	if modifierForm {
+		for _, e := range v.(bson.D) {
+			switch e.Key {
+			case "$each":
+				arr, ok := e.Value.(bson.A)
+				if !ok {
+					return fmt.Errorf("%s: $each requires an array", name)
+				}
+				values = arr
+			case "$position":
+				positionVal = e.Value
+				hasPosition = true
+			case "$sort":
+				sortVal = e.Value
+				hasSort = true
+			case "$slice":
+				sliceVal = e.Value
+				hasSlice = true
+			default:
+				return fmt.Errorf("%s: unknown modifier %q", name, e.Key)
+			}
+		}
+	} else {
+		values = bson.A{v}
 	}
 
-	// record change if result is an array
-	if array, ok := res.(bson.A); ok {
-		addedPath := path + "." + strconv.Itoa(len(array)-1)
-		err = ctx.Value.(*Changes).Record(addedPath, v)
-		if err != nil {
-			return err
+	// load current array (or treat a missing field as empty)
+	field := bsonkit.Get(doc, path)
+	var arr bson.A
+	if field == bsonkit.Missing {
+		arr = bson.A{}
+	} else {
+		var ok bool
+		arr, ok = field.(bson.A)
+		if !ok {
+			return fmt.Errorf("value at path %q is not an array", path)
 		}
 	}
 
+	// determine the insertion index from $position; default is append at end
+	insertAt := len(arr)
+	if hasPosition {
+		p, err := pushIntModifier(name, "$position", positionVal)
+		if err != nil {
+			return err
+		}
+		if p < 0 {
+			insertAt = len(arr) + int(p)
+			if insertAt < 0 {
+				insertAt = 0
+			}
+		} else {
+			insertAt = int(p)
+			if insertAt > len(arr) {
+				insertAt = len(arr)
+			}
+		}
+	}
+
+	// build the new array: existing prefix + inserted values + existing suffix
+	newArr := make(bson.A, 0, len(arr)+len(values))
+	newArr = append(newArr, arr[:insertAt]...)
+	newArr = append(newArr, values...)
+	newArr = append(newArr, arr[insertAt:]...)
+
+	// MongoDB applies modifiers in order: $position (above), then $sort, then
+	// $slice
+	if hasSort {
+		if err := pushSort(name, newArr, sortVal); err != nil {
+			return err
+		}
+	}
+	if hasSlice {
+		s, err := pushIntModifier(name, "$slice", sliceVal)
+		if err != nil {
+			return err
+		}
+		switch {
+		case s == 0:
+			newArr = bson.A{}
+		case s > 0:
+			if int(s) < len(newArr) {
+				newArr = newArr[:int(s)]
+			}
+		default: // s < 0
+			keep := -int(s)
+			if keep < len(newArr) {
+				newArr = newArr[len(newArr)-keep:]
+			}
+		}
+	}
+
+	// store the updated array
+	if _, err := bsonkit.Put(doc, path, newArr, false); err != nil {
+		return err
+	}
+
+	// no-op if neither the array contents nor its length changed (e.g. empty
+	// $each with no other modifiers): skip the change record entirely
+	if len(values) == 0 && !hasPosition && !hasSort && !hasSlice {
+		return nil
+	}
+
+	// record changes: a plain push and a pure $each-append both leave existing
+	// elements in place, so we record per-element changes (matching the
+	// pre-modifier behavior). Anything that can shift elements ($position not
+	// at end, $sort, $slice) records the whole array.
+	changes := ctx.Value.(*Changes)
+	if !hasSort && !hasSlice && insertAt == len(arr) {
+		startIdx := insertAt
+		for i, val := range values {
+			err := changes.Record(path+"."+strconv.Itoa(startIdx+i), val)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return changes.Record(path, newArr)
+}
+
+func pushIntModifier(name, modifier string, v interface{}) (int64, error) {
+	switch n := v.(type) {
+	case int32:
+		return int64(n), nil
+	case int64:
+		return n, nil
+	case float64:
+		if n != float64(int64(n)) {
+			return 0, fmt.Errorf("%s: %s must be an integer", name, modifier)
+		}
+		return int64(n), nil
+	default:
+		return 0, fmt.Errorf("%s: %s must be an integer", name, modifier)
+	}
+}
+
+func pushSort(name string, arr bson.A, spec interface{}) error {
+	// spec may be a direction (1 or -1) for whole-element sort, or a sort
+	// document selecting fields when the array contains subdocuments
+	switch s := spec.(type) {
+	case int32:
+		return pushSortDirect(name, arr, int(s))
+	case int64:
+		return pushSortDirect(name, arr, int(s))
+	case float64:
+		if s != float64(int64(s)) {
+			return fmt.Errorf("%s: $sort must be an integer or document", name)
+		}
+		return pushSortDirect(name, arr, int(s))
+	case bson.D:
+		// collect columns
+		columns := make([]bsonkit.Column, 0, len(s))
+		for _, e := range s {
+			dir, err := pushIntModifier(name, "$sort", e.Value)
+			if err != nil {
+				return err
+			}
+			if dir != 1 && dir != -1 {
+				return fmt.Errorf("%s: $sort direction must be 1 or -1", name)
+			}
+			columns = append(columns, bsonkit.Column{Path: e.Key, Reverse: dir == -1})
+		}
+
+		// every element must be a document for field-based sort
+		docs := make([]bson.D, len(arr))
+		for i, item := range arr {
+			d, ok := item.(bson.D)
+			if !ok {
+				return fmt.Errorf("%s: $sort with field document requires array of documents", name)
+			}
+			docs[i] = d
+		}
+
+		// sort indices and reorder original slice in place to keep arr
+		// observable from the caller
+		idx := make([]int, len(arr))
+		for i := range idx {
+			idx[i] = i
+		}
+		sort.SliceStable(idx, func(i, j int) bool {
+			di := docs[idx[i]]
+			dj := docs[idx[j]]
+			return bsonkit.Order(&di, &dj, columns, false) < 0
+		})
+		sorted := make(bson.A, len(arr))
+		for i, k := range idx {
+			sorted[i] = arr[k]
+		}
+		copy(arr, sorted)
+		return nil
+	default:
+		return fmt.Errorf("%s: $sort must be an integer or document", name)
+	}
+}
+
+func pushSortDirect(name string, arr bson.A, dir int) error {
+	if dir != 1 && dir != -1 {
+		return fmt.Errorf("%s: $sort direction must be 1 or -1", name)
+	}
+	sort.SliceStable(arr, func(i, j int) bool {
+		c := bsonkit.Compare(arr[i], arr[j])
+		if dir == -1 {
+			return c > 0
+		}
+		return c < 0
+	})
 	return nil
 }
 
