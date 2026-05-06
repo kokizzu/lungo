@@ -1279,9 +1279,14 @@ func (s *DownloadStream) seek(position int) error {
 		return ErrNegativePosition
 	}
 
+	// close any previously opened cursor before replacing it
+	if s.cursor != nil {
+		_ = s.cursor.Close(s.context)
+		s.cursor = nil
+	}
+
 	// check position
 	if position >= s.file.Length {
-		s.cursor = nil
 		s.chunk = nil
 		s.buffer = nil
 		return nil
