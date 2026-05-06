@@ -3,6 +3,7 @@ package bsonkit
 import (
 	"fmt"
 	"regexp"
+	"unicode/utf8"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
@@ -367,7 +368,7 @@ func (s *Schema) evaluateString(str string) error {
 				if Compare(kv, int32(0)) < 0 {
 					return fmt.Errorf("invalid minLength value: %v", kv)
 				}
-				if Compare(int64(len(str)), kv) < 0 {
+				if Compare(int64(utf8.RuneCountInString(str)), kv) < 0 {
 					return ErrValidationFailed
 				}
 			default:
@@ -379,7 +380,7 @@ func (s *Schema) evaluateString(str string) error {
 				if Compare(kv, int32(0)) < 0 {
 					return fmt.Errorf("invalid maxLength value: %v", kv)
 				}
-				if Compare(int64(len(str)), kv) > 0 {
+				if Compare(int64(utf8.RuneCountInString(str)), kv) > 0 {
 					return ErrValidationFailed
 				}
 			default:

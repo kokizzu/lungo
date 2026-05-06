@@ -226,6 +226,12 @@ func TestSchemaEvaluateString(t *testing.T) {
 	evaluateSchema(t, schema, true, "foo")
 	evaluateSchema(t, schema, false, "foos")
 
+	// length is measured in runes, not bytes; "café" is 4 runes / 5 bytes
+	schema = newSchema(bson.M{"maxLength": 4})
+	evaluateSchema(t, schema, true, "café")
+	schema = newSchema(bson.M{"minLength": 4, "maxLength": 4})
+	evaluateSchema(t, schema, true, "café")
+
 	// invalid pattern
 	validateSchema(t, bson.M{"pattern": 2}, "", "invalid pattern value: 2")
 	validateSchema(t, bson.M{"pattern": "[0"}, "", "invalid pattern regex: [0")
