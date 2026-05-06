@@ -28,6 +28,7 @@ func init() {
 	FieldUpdateOperators["$push"] = applyPush
 	FieldUpdateOperators["$pop"] = applyPop
 	FieldUpdateOperators["$pull"] = applyPull
+	FieldUpdateOperators["$pullAll"] = applyPullAll
 }
 
 // Changes record the applied changes to a document.
@@ -467,6 +468,56 @@ func applyPull(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) e
 		match, err := pullMatches(item, v)
 		if err != nil {
 			return err
+		}
+		if match {
+			removed = true
+			continue
+		}
+		result = append(result, item)
+	}
+
+	// no-op if nothing was removed
+	if !removed {
+		return nil
+	}
+
+	// store new array
+	_, err := bsonkit.Put(doc, path, result, false)
+	if err != nil {
+		return err
+	}
+
+	// record change
+	return ctx.Value.(*Changes).Record(path, result)
+}
+
+func applyPullAll(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
+	// expect an array of values to remove
+	targets, ok := v.(bson.A)
+	if !ok {
+		return fmt.Errorf("%s: expected array", name)
+	}
+
+	// get target field
+	field := bsonkit.Get(doc, path)
+	if field == bsonkit.Missing {
+		return nil
+	}
+	arr, ok := field.(bson.A)
+	if !ok {
+		return fmt.Errorf("%s: target field must be an array", name)
+	}
+
+	// build new array, dropping any element equal to one of the targets
+	result := make(bson.A, 0, len(arr))
+	removed := false
+	for _, item := range arr {
+		match := false
+		for _, target := range targets {
+			if bsonkit.Compare(item, target) == 0 {
+				match = true
+				break
+			}
 		}
 		if match {
 			removed = true

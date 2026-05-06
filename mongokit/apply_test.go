@@ -1170,3 +1170,29 @@ func TestApplyPull(t *testing.T) {
 		}))
 	})
 }
+
+func TestApplyPullAll(t *testing.T) {
+	// non-array argument
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pullAll": bson.M{
+				"foo": "x",
+			},
+		}, nil, "$pullAll: expected array")
+	})
+
+	// removes all matching values
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a", "b", "c", "a", "d"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$pullAll": bson.M{
+				"foo": bson.A{"a", "c"},
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.A{"b", "d"},
+		}))
+	})
+}
