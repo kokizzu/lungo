@@ -1345,13 +1345,16 @@ func (s *DownloadStream) seek(position int) error {
 }
 
 func (s *DownloadStream) next() error {
-	// advance cursor
-	if s.cursor == nil || !s.cursor.Next(s.context) {
-		// check error
-		if s.cursor.Err() != nil {
-			return s.cursor.Err()
-		}
+	// no cursor means we are past the end
+	if s.cursor == nil {
+		return io.EOF
+	}
 
+	// advance cursor
+	if !s.cursor.Next(s.context) {
+		if err := s.cursor.Err(); err != nil {
+			return err
+		}
 		return io.EOF
 	}
 
