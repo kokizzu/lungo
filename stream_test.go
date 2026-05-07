@@ -783,7 +783,11 @@ func TestStreamResumption(t *testing.T) {
 }
 
 func TestStreamStartAtNonMatchingTimestamp(t *testing.T) {
-	c := testLungoClient.Database(testDB).Collection(collectionName())
+	// use a database name that no other test touches: dropDatabase events
+	// emitted for other databases are filtered out by the stream's nsDB
+	// check, so a virgin namespace keeps the oplog replay free of historical
+	// invalidating events for this stream
+	c := testLungoClient.Database("test-lungo-start-at-non-matching").Collection(collectionName())
 
 	_, err := c.InsertOne(nil, bson.M{"foo": "bar"})
 	assert.NoError(t, err)
@@ -865,6 +869,61 @@ func TestStreamInvalidationCollection(t *testing.T) {
 		assert.NoError(t, err)
 
 		err = stream.Err()
+		assert.NoError(t, err)
+	})
+}
+
+// A collection-scoped change stream must invalidate when its containing
+// database is dropped. The dropDatabase oplog event carries only ns.db (no
+// ns.coll), so the stream filter previously rejected it and the stream waited
+// forever.
+func TestStreamCollectionInvalidationViaDatabaseDrop(t *testing.T) {
+	clientTest(t, func(t *testing.T, c IClient) {
+		dbName := "test-lungo-stream-cidd"
+
+		// reset the database so the test is repeatable
+		err := c.Database(dbName).Drop(nil)
+		assert.NoError(t, err)
+
+		coll := c.Database(dbName).Collection("foo")
+		_, err = coll.InsertOne(nil, bson.M{})
+		assert.NoError(t, err)
+
+		stream, err := coll.Watch(nil, bson.A{})
+		assert.NoError(t, err)
+		assert.NotNil(t, stream)
+
+		// drop the entire database (not the collection)
+		err = c.Database(dbName).Drop(nil)
+		assert.NoError(t, err)
+
+		// MongoDB emits a `drop` event for each collection followed by
+		// `dropDatabase`, then the invalidate. Drain events until we see the
+		// invalidate to stay agnostic to ordering.
+		var sawInvalidate bool
+		for !sawInvalidate {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ret := stream.Next(ctx)
+			cancel()
+			if !ret {
+				assert.NoError(t, stream.Err())
+				t.Fatal("stream did not produce an invalidate event after dropDatabase")
+			}
+
+			var event bson.M
+			err = stream.Decode(&event)
+			assert.NoError(t, err)
+			if event["operationType"] == "invalidate" {
+				sawInvalidate = true
+			}
+		}
+
+		// after invalidate, Next returns false with no error
+		ret := stream.Next(nil)
+		assert.False(t, ret)
+		assert.NoError(t, stream.Err())
+
+		err = stream.Close(nil)
 		assert.NoError(t, err)
 	})
 }

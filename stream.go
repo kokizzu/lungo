@@ -192,7 +192,10 @@ func (s *Stream) next(ctx context.Context, block bool) bool {
 				s.last = event
 				s.mutex.Unlock()
 				continue
-			} else if s.handle[1] != "" && s.handle[1] != nsColl {
+			} else if s.handle[1] != "" && s.handle[1] != nsColl && opType != "dropDatabase" {
+				// dropDatabase events carry only ns.db; let them through so a
+				// collection-scoped stream watching a database that's being
+				// dropped still gets its invalidation
 				s.last = event
 				s.mutex.Unlock()
 				continue
