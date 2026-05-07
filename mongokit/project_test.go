@@ -318,3 +318,58 @@ func TestProjectSlice(t *testing.T) {
 		})
 	})
 }
+
+func TestProjectSliceArray(t *testing.T) {
+	id := primitive.NewObjectID()
+
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": bson.A{int32(1), int32(2), int32(3), int32(4), int32(5)},
+		"bar": "keep",
+	}, func(fn func(bson.M, interface{})) {
+		// [skip:1, limit:2]
+		fn(bson.M{
+			"foo": bson.M{"$slice": bson.A{1, 2}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{int32(2), int32(3)},
+			"bar": "keep",
+		})
+
+		// [skip:0, limit:3]
+		fn(bson.M{
+			"foo": bson.M{"$slice": bson.A{0, 3}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{int32(1), int32(2), int32(3)},
+			"bar": "keep",
+		})
+
+		// [skip:-2, limit:5] - negative skip with overflowing limit
+		fn(bson.M{
+			"foo": bson.M{"$slice": bson.A{-2, 5}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{int32(4), int32(5)},
+			"bar": "keep",
+		})
+
+		// [skip:-10, limit:2] - skip past start, clamps to start
+		fn(bson.M{
+			"foo": bson.M{"$slice": bson.A{-10, 2}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{int32(1), int32(2)},
+			"bar": "keep",
+		})
+
+		// [skip:99, limit:2] - skip past end, returns empty
+		fn(bson.M{
+			"foo": bson.M{"$slice": bson.A{99, 2}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{},
+			"bar": "keep",
+		})
+	})
+}

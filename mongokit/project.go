@@ -145,17 +145,37 @@ func projectSlice(ctx Context, doc bsonkit.Doc, _, path string, v interface{}) e
 	// get state
 	state := ctx.Value.(*projectState)
 
-	// coerce number
-	var num int
+	// parse argument: either a single number (limit-only) or a [skip, limit]
+	// array
+	var skip, limit int
+	var hasSkip bool
 	switch nn := v.(type) {
 	case int32:
-		num = int(nn)
+		limit = int(nn)
 	case int64:
-		num = int(nn)
+		limit = int(nn)
 	case float64:
-		num = int(nn)
+		limit = int(nn)
+	case bson.A:
+		if len(nn) != 2 {
+			return fmt.Errorf("$slice: array argument requires 2 elements, got %d", len(nn))
+		}
+		s, ok := projectSliceInt(nn[0])
+		if !ok {
+			return fmt.Errorf("$slice: skip must be a number")
+		}
+		l, ok := projectSliceInt(nn[1])
+		if !ok {
+			return fmt.Errorf("$slice: limit must be a number")
+		}
+		if l < 0 {
+			return fmt.Errorf("$slice: limit must be non-negative")
+		}
+		skip = s
+		limit = l
+		hasSkip = true
 	default:
-		return fmt.Errorf("expected number")
+		return fmt.Errorf("expected number or array")
 	}
 
 	// get array
@@ -164,29 +184,60 @@ func projectSlice(ctx Context, doc bsonkit.Doc, _, path string, v interface{}) e
 		return nil
 	}
 
-	// handle positive
-	if num > 0 {
-		if num < len(array) {
-			state.merge[path] = array[0:num]
+	// handle [skip, limit] form
+	if hasSkip {
+		n := len(array)
+		var start int
+		if skip < 0 {
+			start = n + skip
+			if start < 0 {
+				start = 0
+			}
+		} else {
+			start = skip
+			if start > n {
+				start = n
+			}
+		}
+		end := start + limit
+		if end > n {
+			end = n
+		}
+		state.merge[path] = append(bson.A{}, array[start:end]...)
+		return nil
+	}
+
+	// limit-only form
+	switch {
+	case limit > 0:
+		if limit < len(array) {
+			state.merge[path] = array[0:limit]
 		} else {
 			state.merge[path] = array
 		}
-	}
-
-	// handle negative
-	if num < 0 {
-		num *= -1
-		if num < len(array) {
-			state.merge[path] = array[len(array)-num:]
+	case limit < 0:
+		n := -limit
+		if n < len(array) {
+			state.merge[path] = array[len(array)-n:]
 		} else {
 			state.merge[path] = array
 		}
-	}
-
-	// handle zero
-	if num == 0 {
+	default:
 		state.merge[path] = bson.A{}
 	}
 
 	return nil
+}
+
+func projectSliceInt(v interface{}) (int, bool) {
+	switch n := v.(type) {
+	case int32:
+		return int(n), true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	default:
+		return 0, false
+	}
 }
