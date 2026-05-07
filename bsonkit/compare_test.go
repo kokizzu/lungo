@@ -51,3 +51,28 @@ func TestCompare(t *testing.T) {
 	assert.Equal(t, -1, Compare(int64(math.MaxInt64), bigFloat))
 	assert.Equal(t, 1, Compare(bigFloat, int64(math.MaxInt64)))
 }
+
+func TestCompareNonFiniteNumbersNoPanic(t *testing.T) {
+	floats := []float64{math.NaN(), math.Inf(1), math.Inf(-1)}
+	specials := []primitive.Decimal128{d128("NaN"), d128("Infinity"), d128("-Infinity")}
+
+	for _, f := range floats {
+		for _, d := range specials {
+			assert.NotPanics(t, func() { Compare(f, d) })
+			assert.NotPanics(t, func() { Compare(d, f) })
+		}
+		// finite Decimal128 against non-finite float
+		assert.NotPanics(t, func() { Compare(f, d128("1")) })
+		assert.NotPanics(t, func() { Compare(d128("1"), f) })
+	}
+
+	for _, d := range specials {
+		// finite float against non-finite Decimal128
+		assert.NotPanics(t, func() { Compare(float64(1), d) })
+		assert.NotPanics(t, func() { Compare(d, float64(1)) })
+
+		// integer types against non-finite Decimal128
+		assert.NotPanics(t, func() { Compare(int32(1), d) })
+		assert.NotPanics(t, func() { Compare(d, int64(1)) })
+	}
+}

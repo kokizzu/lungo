@@ -1,6 +1,7 @@
 package bsonkit
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,4 +92,26 @@ func TestMod(t *testing.T) {
 	assert.Equal(t, d128("0"), Mod(d128("2"), int64(2)))
 	assert.Equal(t, d128("0"), Mod(d128("2"), float64(2)))
 	assert.Equal(t, d128("0"), Mod(d128("2"), d128("2")))
+}
+
+func TestArithmeticNonFiniteDecimal128(t *testing.T) {
+	for _, special := range []primitive.Decimal128{d128("NaN"), d128("Infinity"), d128("-Infinity")} {
+		assert.NotPanics(t, func() { Add(int32(1), special) })
+		assert.NotPanics(t, func() { Add(special, d128("1")) })
+		assert.NotPanics(t, func() { Mul(int32(2), special) })
+		assert.NotPanics(t, func() { Mul(special, d128("2")) })
+		assert.NotPanics(t, func() { Mod(int32(5), special) })
+		assert.NotPanics(t, func() { Mod(special, d128("2")) })
+	}
+}
+
+func TestArithmeticNonFiniteFloatWithDecimal128(t *testing.T) {
+	for _, special := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		assert.NotPanics(t, func() { Add(special, d128("1")) })
+		assert.NotPanics(t, func() { Add(d128("1"), special) })
+		assert.NotPanics(t, func() { Mul(special, d128("2")) })
+		assert.NotPanics(t, func() { Mul(d128("2"), special) })
+		assert.NotPanics(t, func() { Mod(special, d128("2")) })
+		assert.NotPanics(t, func() { Mod(d128("5"), special) })
+	}
 }

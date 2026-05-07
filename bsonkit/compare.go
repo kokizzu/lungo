@@ -65,7 +65,10 @@ func compareNumbers(lv, rv interface{}) int {
 		case int64:
 			return compareFloat64ToInt64(l, r)
 		case primitive.Decimal128:
-			return decimal.NewFromFloat(l).Cmp(d128ToDec(r))
+			// safeFloatToDec guards against float64 NaN/±Inf, which would
+			// otherwise panic decimal.NewFromFloat (collapses to zero —
+			// non-finite ordering is a known imprecision, see math.go TODO)
+			return safeFloatToDec(l).Cmp(safeD128ToDec(r))
 		}
 	case int32:
 		switch r := rv.(type) {
@@ -76,7 +79,7 @@ func compareNumbers(lv, rv interface{}) int {
 		case int64:
 			return compareInt64s(int64(l), r)
 		case primitive.Decimal128:
-			return decimal.NewFromInt32(l).Cmp(d128ToDec(r))
+			return decimal.NewFromInt32(l).Cmp(safeD128ToDec(r))
 		}
 	case int64:
 		switch r := rv.(type) {
@@ -87,18 +90,18 @@ func compareNumbers(lv, rv interface{}) int {
 		case int64:
 			return compareInt64s(l, r)
 		case primitive.Decimal128:
-			return decimal.NewFromInt(l).Cmp(d128ToDec(r))
+			return decimal.NewFromInt(l).Cmp(safeD128ToDec(r))
 		}
 	case primitive.Decimal128:
 		switch r := rv.(type) {
 		case float64:
-			return d128ToDec(l).Cmp(decimal.NewFromFloat(r))
+			return safeD128ToDec(l).Cmp(safeFloatToDec(r))
 		case int32:
-			return d128ToDec(l).Cmp(decimal.NewFromInt32(r))
+			return safeD128ToDec(l).Cmp(decimal.NewFromInt32(r))
 		case int64:
-			return d128ToDec(l).Cmp(decimal.NewFromInt(r))
+			return safeD128ToDec(l).Cmp(decimal.NewFromInt(r))
 		case primitive.Decimal128:
-			return d128ToDec(l).Cmp(d128ToDec(r))
+			return safeD128ToDec(l).Cmp(safeD128ToDec(r))
 		}
 	}
 
