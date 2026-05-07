@@ -1285,6 +1285,11 @@ func (s *DownloadStream) load() error {
 		return err
 	}
 
+	// validate chunk size before integer division
+	if s.file.ChunkSize <= 0 {
+		return fmt.Errorf("invalid chunk size %d in file metadata", s.file.ChunkSize)
+	}
+
 	// set chunks
 	s.chunks = s.file.Length / s.file.ChunkSize
 	if s.file.Length%s.file.ChunkSize != 0 {
