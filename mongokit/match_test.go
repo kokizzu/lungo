@@ -1447,3 +1447,102 @@ func TestMatchBits(t *testing.T) {
 		}, false)
 	})
 }
+
+func TestMatchMod(t *testing.T) {
+	matchTest(t, bson.M{
+		"foo": int32(10),
+	}, func(fn func(bson.M, interface{})) {
+		// invalid argument shapes
+		fn(bson.M{
+			"foo": bson.M{"$mod": int32(1)},
+		}, "$mod: expected array")
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3)}},
+		}, "$mod: expected array of two elements")
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(1), int32(2), int32(3)}},
+		}, "$mod: expected array of two elements")
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{"x", int32(0)}},
+		}, "$mod: divisor must be a number")
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(2), "x"}},
+		}, "$mod: remainder must be a number")
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(0), int32(0)}},
+		}, "$mod: divisor cannot be zero")
+
+		// matching int32 field
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3), int32(1)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3), int32(2)}},
+		}, false)
+
+		// int64 / float64 operands are accepted and truncated
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int64(4), int64(2)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{3.7, 1.9}},
+		}, true) // truncated to (3, 1) → 10 % 3 == 1
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{3.0, 1.0}},
+		}, true)
+	})
+
+	// fractional float field is truncated toward zero
+	matchTest(t, bson.M{
+		"foo": 10.7,
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3), int32(1)}},
+		}, true) // trunc(10.7)=10, 10%3=1
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3), int32(2)}},
+		}, false)
+	})
+
+	// negative dividend retains sign of dividend in remainder
+	matchTest(t, bson.M{
+		"foo": int32(-7),
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3), int32(-1)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(3), int32(2)}},
+		}, false)
+	})
+
+	// non-numeric field never matches
+	matchTest(t, bson.M{
+		"foo": "bar",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(1), int32(0)}},
+		}, false)
+	})
+
+	// missing field never matches
+	matchTest(t, bson.M{
+		"foo": int32(1),
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"bar": bson.M{"$mod": bson.A{int32(1), int32(0)}},
+		}, false)
+	})
+
+	// array field unwinds: matches if any element matches
+	matchTest(t, bson.M{
+		"foo": bson.A{int32(3), int32(7), int32(10)},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(5), int32(0)}},
+		}, true) // 10 % 5 == 0
+		fn(bson.M{
+			"foo": bson.M{"$mod": bson.A{int32(5), int32(4)}},
+		}, false)
+	})
+}

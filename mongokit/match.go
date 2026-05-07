@@ -50,6 +50,7 @@ func init() {
 	ExpressionQueryOperators["$bitsAllSet"] = matchBits
 	ExpressionQueryOperators["$bitsAnyClear"] = matchBits
 	ExpressionQueryOperators["$bitsAnySet"] = matchBits
+	ExpressionQueryOperators["$mod"] = matchMod
 }
 
 // Match will test if the specified document matches the supplied MongoDB query
@@ -459,6 +460,89 @@ func matchElem(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) e
 	}
 
 	return ErrNotMatched
+}
+
+func matchMod(_ Context, doc bsonkit.Doc, name, path string, v interface{}) error {
+	// get array
+	array, ok := v.(bson.A)
+	if !ok {
+		return fmt.Errorf("%s: expected array", name)
+	}
+
+	// MongoDB requires exactly two elements: [divisor, remainder]
+	if len(array) != 2 {
+		return fmt.Errorf("%s: expected array of two elements", name)
+	}
+
+	// parse divisor and remainder; doubles are truncated toward zero
+	divisor, err := modOperandToInt64(name, "divisor", array[0])
+	if err != nil {
+		return err
+	}
+	remainder, err := modOperandToInt64(name, "remainder", array[1])
+	if err != nil {
+		return err
+	}
+
+	// reject zero divisor
+	if divisor == 0 {
+		return fmt.Errorf("%s: divisor cannot be zero", name)
+	}
+
+	return matchUnwind(doc, path, true, false, func(field interface{}) error {
+		// non-numeric or non-finite fields do not match
+		n, ok := numberToInt64(field)
+		if !ok {
+			return ErrNotMatched
+		}
+		if n%divisor != remainder {
+			return ErrNotMatched
+		}
+		return nil
+	})
+}
+
+func modOperandToInt64(name, role string, v interface{}) (int64, error) {
+	switch n := v.(type) {
+	case int32:
+		return int64(n), nil
+	case int64:
+		return n, nil
+	case float64:
+		if math.IsNaN(n) {
+			return 0, fmt.Errorf("%s: %s cannot be NaN", name, role)
+		}
+		if math.IsInf(n, 0) {
+			return 0, fmt.Errorf("%s: %s cannot be infinity", name, role)
+		}
+		// reject doubles that fall outside the int64 range; -float64(MinInt64)
+		// is exactly 2^63, the smallest float strictly above MaxInt64
+		if n < float64(math.MinInt64) || n >= -float64(math.MinInt64) {
+			return 0, fmt.Errorf("%s: %s out of range", name, role)
+		}
+		return int64(math.Trunc(n)), nil
+	default:
+		return 0, fmt.Errorf("%s: %s must be a number", name, role)
+	}
+}
+
+func numberToInt64(v interface{}) (int64, bool) {
+	switch n := v.(type) {
+	case int32:
+		return int64(n), true
+	case int64:
+		return n, true
+	case float64:
+		if math.IsNaN(n) || math.IsInf(n, 0) {
+			return 0, false
+		}
+		if n < float64(math.MinInt64) || n >= -float64(math.MinInt64) {
+			return 0, false
+		}
+		return int64(math.Trunc(n)), true
+	default:
+		return 0, false
+	}
 }
 
 func matchBits(_ Context, doc bsonkit.Doc, op, path string, v interface{}) error {
