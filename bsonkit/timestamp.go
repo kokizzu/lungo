@@ -26,7 +26,11 @@ func Now() primitive.Timestamp {
 		tsCounter = 0
 	}
 
-	// increment counter
+	// increment counter, advancing T on overflow to preserve monotonicity
+	if tsCounter == ^uint32(0) {
+		tsSeconds++
+		tsCounter = 0
+	}
 	tsCounter++
 
 	return primitive.Timestamp{
