@@ -120,6 +120,7 @@ type IChangeStream interface {
 	Err() error
 	ID() int64
 	Next(context.Context) bool
+	RemainingBatchLength() int
 	ResumeToken() bson.Raw
 	SetBatchSize(int32)
 	TryNext(context.Context) bool

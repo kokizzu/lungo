@@ -106,6 +106,12 @@ func (s *Stream) Next(ctx context.Context) bool {
 	return s.next(ctx, true)
 }
 
+// RemainingBatchLength implements the IChangeStream.RemainingBatchLength
+// method.
+func (s *Stream) RemainingBatchLength() int {
+	return 0
+}
+
 // ResumeToken implements the IChangeStream.ResumeToken method.
 func (s *Stream) ResumeToken() bson.Raw {
 	// acquire mutex
