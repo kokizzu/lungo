@@ -576,6 +576,62 @@ func TestApplyRename(t *testing.T) {
 		}, nil, "$rename: source and target must differ")
 	})
 
+	// source is a dotted-path prefix of target
+	applyTest(t, false, bson.M{
+		"foo": bson.M{},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$rename": bson.M{
+				"foo": "foo.bar",
+			},
+		}, nil, "$rename: source and target paths cannot overlap")
+	})
+
+	// target is a dotted-path prefix of source
+	applyTest(t, false, bson.M{
+		"foo": bson.M{
+			"bar": "baz",
+		},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$rename": bson.M{
+				"foo.bar": "foo",
+			},
+		}, nil, "$rename: source and target paths cannot overlap")
+	})
+
+	// non-overlapping siblings under the same parent must still succeed
+	applyTest(t, false, bson.M{
+		"foo": bson.M{
+			"bar": "baz",
+		},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$rename": bson.M{
+				"foo.bar": "foo.qux",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"foo": bson.M{
+				"qux": "baz",
+			},
+		}))
+	})
+
+	// shared-prefix-but-different-field names must not be rejected (e.g.
+	// "ab" is not a dotted-path prefix of "a"); the prefix check is
+	// dotted-path-aware
+	applyTest(t, false, bson.M{
+		"ab": "x",
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$rename": bson.M{
+				"ab": "a",
+			},
+		}, nil, bsonkit.MustConvert(bson.M{
+			"a": "x",
+		}))
+	})
+
 	// changes
 	changes, err := Apply(bsonkit.MustConvert(bson.M{
 		"foo": bson.M{

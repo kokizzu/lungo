@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -173,6 +174,14 @@ func applyRename(ctx Context, doc bsonkit.Doc, name, path string, v interface{})
 	// reject renames where source and target are identical
 	if path == newPath {
 		return fmt.Errorf("%s: source and target must differ", name)
+	}
+
+	// reject renames where one path is a dotted-path prefix of the other
+	// (e.g. "a" → "a.b" or "a.b" → "a"); MongoDB rejects these because they
+	// would unset a parent and then write into it, producing a structure not
+	// expressible by the input
+	if strings.HasPrefix(path, newPath+".") || strings.HasPrefix(newPath, path+".") {
+		return fmt.Errorf("%s: source and target paths cannot overlap", name)
 	}
 
 	// unset old value
