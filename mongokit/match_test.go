@@ -1228,3 +1228,222 @@ func TestMatchElem(t *testing.T) {
 		}, true)
 	})
 }
+
+func TestMatchBits(t *testing.T) {
+	// numeric field: 54 = 0b00110110, bits set at positions 1,2,4,5
+	matchTest(t, bson.M{
+		"foo": int32(54),
+	}, func(fn func(bson.M, interface{})) {
+		// invalid mask types
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": "bad"},
+		}, "$bitsAllSet: expected number, array, or binary")
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(-1)},
+		}, "$bitsAllSet: bitmask must be non-negative")
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": 1.5},
+		}, "$bitsAllSet: expected integer")
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{int32(-1)}},
+		}, "$bitsAllSet: bit position must be non-negative")
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{"bad"}},
+		}, "$bitsAllSet: bit position must be a number")
+
+		// $bitsAllSet — numeric mask
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(0)},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(34)},
+		}, true) // bits 1,5
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(1)},
+		}, false) // bit 0
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(54)},
+		}, true)
+
+		// $bitsAllSet — position array
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{int32(1), int32(5)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{int32(0), int32(3)}},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{}},
+		}, true)
+
+		// $bitsAllClear — numeric mask
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": int32(0)},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": int32(136)},
+		}, true) // bits 3,7
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": int32(3)},
+		}, false) // bits 0,1 — bit 1 is set
+
+		// $bitsAllClear — position array
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": bson.A{int32(0), int32(3), int32(7)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": bson.A{int32(0), int32(1)}},
+		}, false)
+
+		// $bitsAnySet
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnySet": int32(0)},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnySet": int32(1)},
+		}, false) // bit 0 only — not set
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnySet": int32(3)},
+		}, true) // bit 1 is set
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnySet": bson.A{int32(0), int32(2)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnySet": bson.A{int32(0), int32(3)}},
+		}, false)
+
+		// $bitsAnyClear
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": int32(0)},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": int32(1)},
+		}, true) // bit 0 is clear
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": int32(54)},
+		}, false) // all set bits in mask are set in field
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": bson.A{int32(1), int32(5)}},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": bson.A{int32(1), int32(3)}},
+		}, true)
+	})
+
+	// non-integral float field does not match
+	matchTest(t, bson.M{
+		"foo": 1.5,
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(0)},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": int32(0)},
+		}, false)
+	})
+
+	// integral float field matches
+	matchTest(t, bson.M{
+		"foo": 6.0, // 0b110, bits 1,2 set
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(6)},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": int32(1)},
+		}, true)
+	})
+
+	// non-numeric, non-binary field does not match
+	matchTest(t, bson.M{
+		"foo": "bar",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(0)},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": int32(1)},
+		}, false)
+	})
+
+	// missing field does not match
+	matchTest(t, bson.M{
+		"foo": int32(1),
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"bar": bson.M{"$bitsAllSet": int32(0)},
+		}, false)
+	})
+
+	// binary field: bytes [0x36, 0x05] => bit positions
+	// byte 0 = 0x36 = 0b00110110: bits 1,2,4,5 (absolute 1,2,4,5)
+	// byte 1 = 0x05 = 0b00000101: bits 0,2 (absolute 8,10)
+	matchTest(t, bson.M{
+		"foo": primitive.Binary{Data: []byte{0x36, 0x05}},
+	}, func(fn func(bson.M, interface{})) {
+		// numeric mask within first byte
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(0x36)},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(0x01)},
+		}, false)
+
+		// position array spanning bytes
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{int32(1), int32(8), int32(10)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": bson.A{int32(1), int32(9)}},
+		}, false)
+
+		// positions beyond data length are clear
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": bson.A{int32(64), int32(100)}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnySet": bson.A{int32(64), int32(100)}},
+		}, false)
+
+		// binary mask
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": primitive.Binary{Data: []byte{0x36, 0x05}}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": primitive.Binary{Data: []byte{0x36, 0x07}}},
+		}, false)
+
+		// $bitsAnyClear across bytes
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": bson.A{int32(1), int32(8)}},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAnyClear": bson.A{int32(0), int32(1)}},
+		}, true)
+	})
+
+	// binary field with binary mask longer than field — extra mask bytes
+	// reference clear bits in the field
+	matchTest(t, bson.M{
+		"foo": primitive.Binary{Data: []byte{0xFF}},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": primitive.Binary{Data: []byte{0xFF, 0x01}}},
+		}, false)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllClear": primitive.Binary{Data: []byte{0x00, 0xFF}}},
+		}, true)
+	})
+
+	// numeric mask against array field unwinds and matches if any element matches
+	matchTest(t, bson.M{
+		"foo": bson.A{int32(1), int32(2), int32(4)},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(2)},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$bitsAllSet": int32(8)},
+		}, false)
+	})
+}

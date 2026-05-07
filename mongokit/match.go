@@ -3,9 +3,11 @@ package mongokit
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/256dpi/lungo/bsonkit"
 )
@@ -44,6 +46,10 @@ func init() {
 	ExpressionQueryOperators["$all"] = matchAll
 	ExpressionQueryOperators["$size"] = matchSize
 	ExpressionQueryOperators["$elemMatch"] = matchElem
+	ExpressionQueryOperators["$bitsAllClear"] = matchBits
+	ExpressionQueryOperators["$bitsAllSet"] = matchBits
+	ExpressionQueryOperators["$bitsAnyClear"] = matchBits
+	ExpressionQueryOperators["$bitsAnySet"] = matchBits
 }
 
 // Match will test if the specified document matches the supplied MongoDB query
@@ -453,6 +459,182 @@ func matchElem(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) e
 	}
 
 	return ErrNotMatched
+}
+
+func matchBits(_ Context, doc bsonkit.Doc, op, path string, v interface{}) error {
+	// parse the bitmask once into a list of bit positions
+	positions, err := parseBitMask(op, v)
+	if err != nil {
+		return err
+	}
+
+	return matchUnwind(doc, path, true, false, func(field interface{}) error {
+		// resolve a per-position bit accessor for the field; non-numeric
+		// and non-binary fields never match
+		bitAt, ok := bitAccessor(field)
+		if !ok {
+			return ErrNotMatched
+		}
+
+		// count set bits across the requested positions
+		set := 0
+		for _, pos := range positions {
+			if bitAt(pos) {
+				set++
+			}
+		}
+		clear := len(positions) - set
+
+		var matched bool
+		switch op {
+		case "$bitsAllSet":
+			matched = set == len(positions)
+		case "$bitsAllClear":
+			matched = clear == len(positions)
+		case "$bitsAnySet":
+			matched = set > 0
+		case "$bitsAnyClear":
+			matched = clear > 0
+		default:
+			return fmt.Errorf("unknown bits operator %q", op)
+		}
+		if !matched {
+			return ErrNotMatched
+		}
+		return nil
+	})
+}
+
+func parseBitMask(name string, v interface{}) ([]uint, error) {
+	switch m := v.(type) {
+	case int32:
+		if m < 0 {
+			return nil, fmt.Errorf("%s: bitmask must be non-negative", name)
+		}
+		return uint64ToPositions(uint64(m)), nil
+	case int64:
+		if m < 0 {
+			return nil, fmt.Errorf("%s: bitmask must be non-negative", name)
+		}
+		return uint64ToPositions(uint64(m)), nil
+	case float64:
+		if math.IsNaN(m) || math.IsInf(m, 0) || m != math.Floor(m) {
+			return nil, fmt.Errorf("%s: expected integer", name)
+		}
+		if m < 0 {
+			return nil, fmt.Errorf("%s: bitmask must be non-negative", name)
+		}
+		if m > math.MaxInt64 {
+			return nil, fmt.Errorf("%s: bitmask out of range", name)
+		}
+		return uint64ToPositions(uint64(m)), nil
+	case bson.A:
+		positions := make([]uint, 0, len(m))
+		for _, item := range m {
+			pos, err := bitPosition(name, item)
+			if err != nil {
+				return nil, err
+			}
+			positions = append(positions, pos)
+		}
+		return positions, nil
+	case primitive.Binary:
+		positions := make([]uint, 0)
+		for byteIdx, b := range m.Data {
+			for bitIdx := uint(0); bitIdx < 8; bitIdx++ {
+				if b&(1<<bitIdx) != 0 {
+					positions = append(positions, uint(byteIdx)*8+bitIdx)
+				}
+			}
+		}
+		return positions, nil
+	default:
+		return nil, fmt.Errorf("%s: expected number, array, or binary", name)
+	}
+}
+
+func bitPosition(name string, v interface{}) (uint, error) {
+	switch n := v.(type) {
+	case int32:
+		if n < 0 {
+			return 0, fmt.Errorf("%s: bit position must be non-negative", name)
+		}
+		return uint(n), nil
+	case int64:
+		if n < 0 {
+			return 0, fmt.Errorf("%s: bit position must be non-negative", name)
+		}
+		return uint(n), nil
+	case float64:
+		if math.IsNaN(n) || math.IsInf(n, 0) || n != math.Floor(n) {
+			return 0, fmt.Errorf("%s: expected integer bit position", name)
+		}
+		if n < 0 {
+			return 0, fmt.Errorf("%s: bit position must be non-negative", name)
+		}
+		return uint(n), nil
+	default:
+		return 0, fmt.Errorf("%s: bit position must be a number", name)
+	}
+}
+
+func uint64ToPositions(v uint64) []uint {
+	positions := make([]uint, 0)
+	for i := uint(0); i < 64; i++ {
+		if v&(1<<i) != 0 {
+			positions = append(positions, i)
+		}
+	}
+	return positions
+}
+
+func bitAccessor(field interface{}) (func(uint) bool, bool) {
+	switch f := field.(type) {
+	case int32:
+		v := uint64(int64(f))
+		return func(pos uint) bool {
+			if pos >= 64 {
+				return false
+			}
+			return v&(1<<pos) != 0
+		}, true
+	case int64:
+		v := uint64(f)
+		return func(pos uint) bool {
+			if pos >= 64 {
+				return false
+			}
+			return v&(1<<pos) != 0
+		}, true
+	case float64:
+		// non-integral, NaN or infinity values do not match
+		if math.IsNaN(f) || math.IsInf(f, 0) || f != math.Floor(f) {
+			return nil, false
+		}
+		// out-of-range values do not match; -float64(MinInt64) is exactly
+		// 2^63 (the smallest float strictly above MaxInt64)
+		if f < float64(math.MinInt64) || f >= -float64(math.MinInt64) {
+			return nil, false
+		}
+		v := uint64(int64(f))
+		return func(pos uint) bool {
+			if pos >= 64 {
+				return false
+			}
+			return v&(1<<pos) != 0
+		}, true
+	case primitive.Binary:
+		data := f.Data
+		return func(pos uint) bool {
+			byteIdx := pos / 8
+			if int(byteIdx) >= len(data) {
+				return false
+			}
+			return data[byteIdx]&(1<<(pos%8)) != 0
+		}, true
+	default:
+		return nil, false
+	}
 }
 
 func matchUnwind(doc bsonkit.Doc, path string, merge, yieldMerge bool, op func(interface{}) error) error {
