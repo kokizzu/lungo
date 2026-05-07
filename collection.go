@@ -2,6 +2,7 @@ package lungo
 
 import (
 	"context"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -975,6 +976,12 @@ func (c *Collection) InsertOne(ctx context.Context, document interface{}, opts .
 	// check error
 	if result.Error != nil {
 		return nil, result.Error
+	}
+
+	// guard against unexpected empty result; defensive against future changes
+	// to the underlying Insert path
+	if len(result.Modified) == 0 {
+		return nil, fmt.Errorf("insert returned no modified documents")
 	}
 
 	return &mongo.InsertOneResult{
