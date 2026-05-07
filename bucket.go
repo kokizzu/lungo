@@ -26,6 +26,10 @@ var ErrFileNotFound = gridfs.ErrFileNotFound
 // operation is negative.
 var ErrNegativePosition = errors.New("negative position")
 
+// ErrUploadInProgress is returned by Delete on a tracked bucket when a marker
+// for an in-progress upload of the targeted file exists.
+var ErrUploadInProgress = errors.New("upload in progress")
+
 // The bucket marker states.
 const (
 	BucketMarkerStateUploading = "uploading"
@@ -145,23 +149,46 @@ func (b *Bucket) EnableTracking() {
 
 // Delete will remove the specified file from the bucket. If the bucket is
 // tracked, only a marker is inserted that will ensure the file and its chunks
-// are deleted during the next cleanup.
+// are deleted during the next cleanup. If a marker for an in-progress upload
+// of the file exists, ErrUploadInProgress is returned and the upload must be
+// aborted before the file can be deleted.
 func (b *Bucket) Delete(ctx context.Context, id interface{}) error {
-	// just ensure marker if tracked
+	// in tracked mode, transition or insert a marker without clobbering an
+	// existing in-progress upload's marker
 	if b.tracked {
-		_, err := b.markers.ReplaceOne(ctx, bson.M{
-			"files_id": id,
-		}, &BucketMarker{
-			ID:        primitive.NewObjectID(),
-			File:      id,
-			State:     BucketMarkerStateDeleted,
-			Timestamp: time.Now(),
-		}, options.Replace().SetUpsert(true))
-		if err != nil {
+		// look up an existing marker for this files_id
+		var existing BucketMarker
+		err := b.markers.FindOne(ctx, bson.M{"files_id": id}).Decode(&existing)
+		if err != nil && err != mongo.ErrNoDocuments {
 			return err
 		}
 
-		return nil
+		// no marker yet: insert a fresh deleted marker
+		if err == mongo.ErrNoDocuments {
+			_, err = b.markers.InsertOne(ctx, &BucketMarker{
+				ID:        primitive.NewObjectID(),
+				File:      id,
+				State:     BucketMarkerStateDeleted,
+				Timestamp: time.Now(),
+			})
+			return err
+		}
+
+		// refuse if an upload is in progress; otherwise UploadStream.Close
+		// would either fail to find its marker or restore it to "uploaded"
+		if existing.State == BucketMarkerStateUploading {
+			return ErrUploadInProgress
+		}
+
+		// transition the existing marker to deleted, preserving _id so that
+		// concurrent claims and cleanup pass continue to address it consistently
+		_, err = b.markers.ReplaceOne(ctx, bson.M{"_id": existing.ID}, &BucketMarker{
+			ID:        existing.ID,
+			File:      id,
+			State:     BucketMarkerStateDeleted,
+			Timestamp: time.Now(),
+		})
+		return err
 	}
 
 	// delete file

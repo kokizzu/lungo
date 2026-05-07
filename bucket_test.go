@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
@@ -675,6 +676,92 @@ func TestBucketUploadResumingMultiChunk(t *testing.T) {
 		_, err = b.DownloadToStream(nil, id, &buf)
 		assert.NoError(t, err)
 		assert.Equal(t, "ABCDEFGHIJ", buf.String())
+	})
+}
+
+func TestBucketTrackedDeleteDuringUpload(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		b.EnableTracking()
+		err := b.EnsureIndexes(nil, true)
+		assert.NoError(t, err)
+
+		id := primitive.NewObjectID()
+		markerID := primitive.NewObjectID()
+
+		// simulate an in-progress upload by inserting an "uploading" marker
+		_, err = b.GetMarkersCollection(nil).InsertOne(nil, &BucketMarker{
+			ID:        markerID,
+			File:      id,
+			State:     BucketMarkerStateUploading,
+			Timestamp: time.Now(),
+		})
+		assert.NoError(t, err)
+
+		// Delete must refuse to clobber the uploading marker
+		err = b.Delete(nil, id)
+		assert.Equal(t, ErrUploadInProgress, err)
+
+		// the uploading marker must be intact (same _id, still uploading)
+		var existing BucketMarker
+		err = b.GetMarkersCollection(nil).FindOne(nil, bson.M{"files_id": id}).Decode(&existing)
+		assert.NoError(t, err)
+		assert.Equal(t, markerID, existing.ID)
+		assert.Equal(t, BucketMarkerStateUploading, existing.State)
+	})
+}
+
+func TestBucketTrackedDeletePreservesMarkerID(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		b.EnableTracking()
+		err := b.EnsureIndexes(nil, true)
+		assert.NoError(t, err)
+
+		// upload a file normally; the resulting "uploaded" marker has its
+		// own _id which Delete must preserve when transitioning to deleted
+		id, err := b.UploadFromStream(nil, "foo", strings.NewReader("Hello World!"))
+		assert.NoError(t, err)
+		assert.NotEmpty(t, id)
+
+		var before BucketMarker
+		err = b.GetMarkersCollection(nil).FindOne(nil, bson.M{"files_id": id}).Decode(&before)
+		assert.NoError(t, err)
+		assert.Equal(t, BucketMarkerStateUploaded, before.State)
+
+		err = b.Delete(nil, id)
+		assert.NoError(t, err)
+
+		var after BucketMarker
+		err = b.GetMarkersCollection(nil).FindOne(nil, bson.M{"files_id": id}).Decode(&after)
+		assert.NoError(t, err)
+		assert.Equal(t, before.ID, after.ID)
+		assert.Equal(t, BucketMarkerStateDeleted, after.State)
+	})
+}
+
+func TestBucketTrackedDeleteWithoutPriorMarker(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		b.EnableTracking()
+		err := b.EnsureIndexes(nil, true)
+		assert.NoError(t, err)
+
+		// Delete on a never-uploaded id inserts a fresh deleted marker
+		id := primitive.NewObjectID()
+		err = b.Delete(nil, id)
+		assert.NoError(t, err)
+
+		var first BucketMarker
+		err = b.GetMarkersCollection(nil).FindOne(nil, bson.M{"files_id": id}).Decode(&first)
+		assert.NoError(t, err)
+		assert.Equal(t, BucketMarkerStateDeleted, first.State)
+
+		// a second Delete on the same id preserves the marker _id
+		err = b.Delete(nil, id)
+		assert.NoError(t, err)
+
+		var second BucketMarker
+		err = b.GetMarkersCollection(nil).FindOne(nil, bson.M{"files_id": id}).Decode(&second)
+		assert.NoError(t, err)
+		assert.Equal(t, first.ID, second.ID)
 	})
 }
 
