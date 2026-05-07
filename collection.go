@@ -1256,6 +1256,13 @@ func (c *Collection) Watch(_ context.Context, pipeline interface{}, opts ...*opt
 		return nil, err
 	}
 
+	// reject non-empty pipelines: lungo's change streams do not apply the
+	// pipeline, so silently accepting it would yield events that MongoDB
+	// would have filtered out
+	if len(filter) > 0 {
+		panic("lungo: change stream pipelines are not supported")
+	}
+
 	// get resume after
 	var resumeAfter bsonkit.Doc
 	if opt.ResumeAfter != nil {

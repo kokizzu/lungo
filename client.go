@@ -221,6 +221,11 @@ func (c *Client) Watch(_ context.Context, pipeline interface{}, opts ...*options
 		return nil, err
 	}
 
+	// reject non-empty pipelines
+	if len(filter) > 0 {
+		panic("lungo: change stream pipelines are not supported")
+	}
+
 	// get resume after
 	var resumeAfter bsonkit.Doc
 	if opt.ResumeAfter != nil {
