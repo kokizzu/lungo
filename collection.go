@@ -109,6 +109,13 @@ func (c *Collection) BulkWrite(ctx context.Context, models []mongo.WriteModel, o
 			op.Document = doc
 		}
 
+		// reject operator-style replacements
+		if opcode == Replace {
+			if err := validateReplacement(op.Document); err != nil {
+				return nil, err
+			}
+		}
+
 		// transform filter
 		if filter != nil {
 			flt, err := bsonkit.Transform(filter)
@@ -725,6 +732,11 @@ func (c *Collection) FindOneAndReplace(ctx context.Context, filter, replacement 
 		return &SingleResult{err: err}
 	}
 
+	// reject operator-style replacements
+	if err := validateReplacement(repl); err != nil {
+		return &SingleResult{err: err}
+	}
+
 	// get upsert
 	var upsert bool
 	if opt.Upsert != nil {
@@ -1023,6 +1035,11 @@ func (c *Collection) ReplaceOne(ctx context.Context, filter, replacement interfa
 	// transform document
 	doc, err := bsonkit.Transform(replacement)
 	if err != nil {
+		return nil, err
+	}
+
+	// reject operator-style replacements
+	if err := validateReplacement(doc); err != nil {
 		return nil, err
 	}
 

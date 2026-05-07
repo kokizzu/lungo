@@ -1559,6 +1559,25 @@ func TestCollectionReplaceOne(t *testing.T) {
 				"bar": "quz",
 			},
 		}, dumpCollection(c, false))
+
+		// operator-style replacement must be rejected
+		res2, err = c.ReplaceOne(nil, bson.M{
+			"_id": id1,
+		}, bson.M{
+			"$set": bson.M{"foo": "qux"},
+		})
+		assert.Error(t, err)
+		assert.Nil(t, res2)
+		assert.Equal(t, []bson.M{
+			{
+				"_id": id1,
+				"foo": "baz",
+			},
+			{
+				"_id": id2,
+				"bar": "quz",
+			},
+		}, dumpCollection(c, false))
 	})
 }
 

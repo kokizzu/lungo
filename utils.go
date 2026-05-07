@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
+
+	"github.com/256dpi/lungo/bsonkit"
 )
 
 const (
@@ -40,6 +43,20 @@ func assertOptions(opts interface{}, fields map[string]string) {
 			panic(fmt.Sprintf("lungo: unsupported option: %s", name))
 		}
 	}
+}
+
+// validateReplacement rejects replacement documents whose first key begins
+// with '$'. The official mongo-driver enforces this client-side because such
+// documents look like update operators and would otherwise be silently stored
+// as data.
+func validateReplacement(doc bsonkit.Doc) error {
+	if doc == nil || len(*doc) == 0 {
+		return nil
+	}
+	if strings.HasPrefix((*doc)[0].Key, "$") {
+		return fmt.Errorf("replacement document cannot contain keys beginning with '$'")
+	}
+	return nil
 }
 
 func useTransaction(ctx context.Context, engine *Engine, lock bool, fn func(*Transaction) (interface{}, error)) (interface{}, error) {
