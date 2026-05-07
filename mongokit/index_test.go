@@ -282,6 +282,36 @@ func TestIndexClone(t *testing.T) {
 	assert.True(t, mustHas(index2.Has(d3)))
 }
 
+func TestIndexMultiKeyUnique(t *testing.T) {
+	d1 := bsonkit.MustConvert(bson.M{"tags": bson.A{"x"}})
+	d2 := bsonkit.MustConvert(bson.M{"tags": bson.A{"x", "y"}})
+
+	index, err := CreateIndex(IndexConfig{
+		Key: bsonkit.MustConvert(bson.M{
+			"tags": int32(1),
+		}),
+		Unique: true,
+	})
+	assert.NoError(t, err)
+
+	ok, err := index.Add(d1)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	// d2 overlaps on "x" with d1 — must be rejected
+	ok, err = index.Add(d2)
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	ok, err = index.Remove(d1)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	ok, err = index.Add(d2)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+}
+
 func TestIndexPartial(t *testing.T) {
 	d1 := bsonkit.MustConvert(bson.M{"a": "1", "b": 2.0})
 	d2 := bsonkit.MustConvert(bson.M{"a": "1", "b": 42.0})

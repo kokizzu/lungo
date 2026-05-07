@@ -250,3 +250,63 @@ func TestIndexClone(t *testing.T) {
 	assert.True(t, index2.Has(d3))
 	assert.Equal(t, List{d2, d3}, index2.List())
 }
+
+func TestIndexMultiKey(t *testing.T) {
+	d1 := MustConvert(bson.M{"tags": bson.A{"x", "y"}})
+	d2 := MustConvert(bson.M{"tags": bson.A{"y", "z"}})
+
+	index := NewIndex(false, []Column{
+		{Path: "tags"},
+	})
+
+	ok := index.Add(d1)
+	assert.True(t, ok)
+	ok = index.Add(d2)
+	assert.True(t, ok)
+
+	assert.True(t, index.Has(d1))
+	assert.True(t, index.Has(d2))
+
+	// list returns each document once even though d1 and d2 share key "y"
+	list := index.List()
+	assert.Len(t, list, 2)
+
+	ok = index.Remove(d1)
+	assert.True(t, ok)
+	assert.False(t, index.Has(d1))
+	assert.True(t, index.Has(d2))
+	assert.Equal(t, List{d2}, index.List())
+}
+
+func TestIndexMultiKeyUnique(t *testing.T) {
+	d1 := MustConvert(bson.M{"tags": bson.A{"x"}})
+	d2 := MustConvert(bson.M{"tags": bson.A{"x", "y"}})
+	d3 := MustConvert(bson.M{"tags": bson.A{"y", "x"}})
+	d4 := MustConvert(bson.M{"tags": bson.A{"z"}})
+
+	index := NewIndex(true, []Column{
+		{Path: "tags"},
+	})
+
+	ok := index.Add(d1)
+	assert.True(t, ok)
+
+	// d2 overlaps on "x" with d1 — must be rejected
+	ok = index.Add(d2)
+	assert.False(t, ok)
+
+	// d3 overlaps on "x" with d1 — order doesn't matter
+	ok = index.Add(d3)
+	assert.False(t, ok)
+
+	// d4 has no overlap — admitted
+	ok = index.Add(d4)
+	assert.True(t, ok)
+
+	// remove d1, then d2 fits
+	ok = index.Remove(d1)
+	assert.True(t, ok)
+
+	ok = index.Add(d2)
+	assert.True(t, ok)
+}
