@@ -146,6 +146,38 @@ func TestBucketBasic(t *testing.T) {
 	})
 }
 
+func TestBucketOpenDownloadStreamMissing(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		stream, err := b.OpenDownloadStream(nil, primitive.NewObjectID())
+		assert.Equal(t, ErrFileNotFound, err)
+		assert.Nil(t, stream)
+
+		stream, err = b.OpenDownloadStreamByName(nil, "missing")
+		assert.Equal(t, ErrFileNotFound, err)
+		assert.Nil(t, stream)
+	})
+}
+
+func TestBucketDeleteOrphanChunks(t *testing.T) {
+	bucketTest(t, 0, func(t *testing.T, b *Bucket) {
+		id, err := b.UploadFromStream(nil, "foo", strings.NewReader("Hello World!"))
+		assert.NoError(t, err)
+
+		// remove only the files row, leaving chunks behind
+		_, err = b.files.DeleteOne(nil, bson.M{"_id": id})
+		assert.NoError(t, err)
+
+		// Delete must surface ErrFileNotFound (the orphan chunks are still
+		// cleaned up internally so subsequent finds return nothing)
+		err = b.Delete(nil, id)
+		assert.Equal(t, ErrFileNotFound, err)
+
+		n, err := b.chunks.CountDocuments(nil, bson.M{"files_id": id})
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), n)
+	})
+}
+
 func TestBucketEmptyFile(t *testing.T) {
 	data := make([]byte, 0)
 

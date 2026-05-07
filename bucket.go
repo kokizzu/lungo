@@ -199,16 +199,18 @@ func (b *Bucket) Delete(ctx context.Context, id interface{}) error {
 		return err
 	}
 
-	// delete chunks, even if file is missing
-	res2, err := b.chunks.DeleteMany(ctx, bson.M{
+	// delete chunks, even if file is missing (orphan chunks are still cleaned
+	// up so the namespace doesn't accumulate dangling data)
+	_, err = b.chunks.DeleteMany(ctx, bson.M{
 		"files_id": id,
 	})
 	if err != nil {
 		return err
 	}
 
-	// return error if no chunks or files have been deleted
-	if res1.DeletedCount == 0 && res2.DeletedCount == 0 {
+	// match the official driver: ErrFileNotFound is reported whenever the
+	// files row is missing, regardless of whether orphan chunks existed
+	if res1.DeletedCount == 0 {
 		return ErrFileNotFound
 	}
 
@@ -325,6 +327,12 @@ func (b *Bucket) OpenDownloadStream(ctx context.Context, id interface{}) (*Downl
 	// create stream
 	stream := newDownloadStream(ctx, b, id, "", -1)
 
+	// match the official driver: surface ErrFileNotFound from Open rather
+	// than deferring it to the first Read/Seek
+	if err := stream.load(); err != nil {
+		return nil, err
+	}
+
 	return stream, nil
 }
 
@@ -347,6 +355,12 @@ func (b *Bucket) OpenDownloadStreamByName(ctx context.Context, name string, opts
 
 	// create stream
 	stream := newDownloadStream(ctx, b, nil, name, revision)
+
+	// match the official driver: surface ErrFileNotFound from Open rather
+	// than deferring it to the first Read/Seek
+	if err := stream.load(); err != nil {
+		return nil, err
+	}
 
 	return stream, nil
 }
