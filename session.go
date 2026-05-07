@@ -24,10 +24,11 @@ type SessionContext struct {
 
 // Session provides a mongo compatible way to handle transactions.
 type Session struct {
-	engine *Engine
-	txn    *Transaction
-	ended  bool
-	mutex  sync.Mutex
+	engine   *Engine
+	txn      *Transaction
+	starting bool
+	ended    bool
+	mutex    sync.Mutex
 }
 
 // ID implements the ISession.ID method.
@@ -149,29 +150,32 @@ func (s *Session) startTransaction(ctx context.Context, opts ...*options.Transac
 		"MaxCommitTime":  ignored,
 	})
 
-	// check session state under the lock; release before calling engine.Begin
-	// because Begin reads sess.Transaction() under e.mutex and would otherwise
-	// deadlock against this lock
+	// reserve the session under the lock so concurrent starts do not both
+	// pass the no-transaction check; release before calling engine.Begin
+	// because Begin reads sess.Transaction() under e.mutex and would
+	// otherwise deadlock against this lock
 	s.mutex.Lock()
 	if s.ended {
 		s.mutex.Unlock()
 		return ErrSessionEnded
 	}
-	if s.txn != nil {
+	if s.txn != nil || s.starting {
 		s.mutex.Unlock()
 		return fmt.Errorf("existing transaction")
 	}
+	s.starting = true
 	s.mutex.Unlock()
 
 	// create transaction
 	txn, err := s.engine.Begin(ctx, true)
+
+	// finalize under the lock; always clear the starting flag
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	s.starting = false
 	if err != nil {
 		return err
 	}
-
-	// store transaction; if the session was concurrently ended, abort
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	if s.ended {
 		s.engine.Abort(txn)
 		return ErrSessionEnded

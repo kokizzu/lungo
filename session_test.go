@@ -2,6 +2,8 @@ package lungo
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -241,6 +243,48 @@ func TestSessionAutomatic(t *testing.T) {
 			},
 		}, readAll(csr))
 	})
+}
+
+func TestSessionStartTransactionConcurrent(t *testing.T) {
+	// concurrent StartTransaction calls on the same session must not both
+	// succeed; at most one can win, the rest must report an existing
+	// transaction error
+	const goroutines = 8
+	const rounds = 32
+
+	for r := 0; r < rounds; r++ {
+		sess, err := testLungoClient.StartSession()
+		assert.NoError(t, err)
+
+		var success int64
+		var existing int64
+		var wg sync.WaitGroup
+		ready := make(chan struct{})
+		wg.Add(goroutines)
+		for i := 0; i < goroutines; i++ {
+			go func() {
+				defer wg.Done()
+				<-ready
+				err := sess.StartTransaction()
+				switch {
+				case err == nil:
+					atomic.AddInt64(&success, 1)
+				case err.Error() == "existing transaction":
+					atomic.AddInt64(&existing, 1)
+				default:
+					t.Errorf("unexpected error: %v", err)
+				}
+			}()
+		}
+		close(ready)
+		wg.Wait()
+
+		assert.Equal(t, int64(1), atomic.LoadInt64(&success), "round %d: expected exactly one StartTransaction to succeed", r)
+		assert.Equal(t, int64(goroutines-1), atomic.LoadInt64(&existing), "round %d: expected the rest to report existing transaction", r)
+
+		_ = sess.AbortTransaction(nil)
+		sess.EndSession(nil)
+	}
 }
 
 func TestSessionListOpsHonorTransaction(t *testing.T) {
