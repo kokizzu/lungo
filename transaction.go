@@ -416,8 +416,9 @@ func (t *Transaction) replace(handle Handle, oplog, namespace *mongokit.Collecti
 		return nil, err
 	}
 
-	// perform upsert
-	if len(res.Modified) == 0 && upsert {
+	// perform upsert when no document matched (using Matched, since Modified
+	// is empty when the replacement equals the existing document)
+	if len(res.Matched) == 0 && upsert {
 		res, err = namespace.Upsert(query, repl, nil, nil)
 		if err != nil {
 			return nil, err
@@ -513,8 +514,9 @@ func (t *Transaction) update(handle Handle, oplog, namespace *mongokit.Collectio
 		return nil, err
 	}
 
-	// perform upsert
-	if len(res.Modified) == 0 && upsert {
+	// perform upsert when no document matched (using Matched, since Modified
+	// is empty when the update was a no-op for every matching document)
+	if len(res.Matched) == 0 && upsert {
 		res, err = namespace.Upsert(query, nil, update, arrayFilters)
 		if err != nil {
 			return nil, err

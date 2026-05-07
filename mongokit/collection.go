@@ -1,6 +1,7 @@
 package mongokit
 
 import (
+	"bytes"
 	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -10,6 +11,18 @@ import (
 )
 
 // TODO: Test Collection.
+
+// docsEqual reports whether two documents are byte-identical when serialized
+// to BSON. This matches MongoDB's nModified semantics: a document only counts
+// as modified if its serialized bytes change.
+func docsEqual(a, b bsonkit.Doc) bool {
+	aBytes, errA := bson.Marshal(a)
+	bBytes, errB := bson.Marshal(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return bytes.Equal(aBytes, bBytes)
+}
 
 // Result is returned by collection operations.
 type Result struct {
@@ -188,9 +201,16 @@ func (c *Collection) Replace(query, repl, sort bsonkit.Doc) (*Result, error) {
 		return nil, fmt.Errorf("unable to replace document in collection")
 	}
 
+	// only count the doc as modified if its BSON bytes actually changed; a
+	// replace with a byte-identical document yields ModifiedCount=0 in MongoDB
+	var modified bsonkit.List
+	if !docsEqual(list[0], repl) {
+		modified = bsonkit.List{repl}
+	}
+
 	return &Result{
 		Matched:  list,
-		Modified: bsonkit.List{repl},
+		Modified: modified,
 	}, nil
 }
 
@@ -279,10 +299,23 @@ func (c *Collection) Update(query, update, sort bsonkit.Doc, skip, limit int, ar
 		}
 	}
 
+	// only include actually-modified docs in Modified/Changes (matches
+	// MongoDB's nModified, which excludes no-op updates such as $set with
+	// the same value). Matched still lists every doc that satisfied the query.
+	modified := make(bsonkit.List, 0, len(newList))
+	filteredChanges := make([]*Changes, 0, len(changes))
+	for i, doc := range newList {
+		if docsEqual(list[i], doc) {
+			continue
+		}
+		modified = append(modified, doc)
+		filteredChanges = append(filteredChanges, changes[i])
+	}
+
 	return &Result{
 		Matched:  list,
-		Modified: newList,
-		Changes:  changes,
+		Modified: modified,
+		Changes:  filteredChanges,
 	}, nil
 }
 

@@ -1902,4 +1902,82 @@ func TestCollectionUpdateOneUpsert(t *testing.T) {
 	})
 }
 
+func TestCollectionUpdateOneUpsertNoOpMatch(t *testing.T) {
+	collectionTest(t, func(t *testing.T, c ICollection) {
+		id := primitive.NewObjectID()
+
+		_, err := c.InsertOne(nil, bson.D{
+			{Key: "_id", Value: id},
+			{Key: "foo", Value: "bar"},
+		})
+		assert.NoError(t, err)
+
+		// $set to an identical value with upsert=true: must match (not insert)
+		// and must report ModifiedCount=0
+		res, err := c.UpdateOne(nil, bson.D{{Key: "_id", Value: id}}, bson.D{
+			{Key: "$set", Value: bson.D{{Key: "foo", Value: "bar"}}},
+		}, options.Update().SetUpsert(true))
+		assert.NoError(t, err)
+		assert.Equal(t, &mongo.UpdateResult{
+			MatchedCount: 1,
+		}, res)
+		assert.Equal(t, []bson.M{
+			{
+				"_id": id,
+				"foo": "bar",
+			},
+		}, dumpCollection(c, false))
+	})
+}
+
+func TestCollectionReplaceOneUpsertNoOpMatch(t *testing.T) {
+	collectionTest(t, func(t *testing.T, c ICollection) {
+		id := primitive.NewObjectID()
+
+		_, err := c.InsertOne(nil, bson.D{
+			{Key: "_id", Value: id},
+			{Key: "foo", Value: "bar"},
+		})
+		assert.NoError(t, err)
+
+		// replace with a byte-identical document with upsert=true: must match
+		// (not insert) and must report ModifiedCount=0
+		res, err := c.ReplaceOne(nil, bson.D{{Key: "_id", Value: id}}, bson.D{
+			{Key: "_id", Value: id},
+			{Key: "foo", Value: "bar"},
+		}, options.Replace().SetUpsert(true))
+		assert.NoError(t, err)
+		assert.Equal(t, &mongo.UpdateResult{
+			MatchedCount: 1,
+		}, res)
+		assert.Equal(t, []bson.M{
+			{
+				"_id": id,
+				"foo": "bar",
+			},
+		}, dumpCollection(c, false))
+	})
+}
+
+func TestCollectionUpdateManyUpsertNoOpMatch(t *testing.T) {
+	collectionTest(t, func(t *testing.T, c ICollection) {
+		_, err := c.InsertMany(nil, bson.A{
+			bson.D{{Key: "foo", Value: "bar"}},
+			bson.D{{Key: "foo", Value: "bar"}},
+			bson.D{{Key: "foo", Value: "bar"}},
+		})
+		assert.NoError(t, err)
+
+		// $set to an identical value with upsert=true: must match all three
+		// (not insert) and must report ModifiedCount=0
+		res, err := c.UpdateMany(nil, bson.D{{Key: "foo", Value: "bar"}}, bson.D{
+			{Key: "$set", Value: bson.D{{Key: "foo", Value: "bar"}}},
+		}, options.Update().SetUpsert(true))
+		assert.NoError(t, err)
+		assert.Equal(t, &mongo.UpdateResult{
+			MatchedCount: 3,
+		}, res)
+	})
+}
+
 // TODO: Test upsert with zero object id.

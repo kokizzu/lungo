@@ -766,9 +766,9 @@ func (c *Collection) FindOneAndReplace(ctx context.Context, filter, replacement 
 		if returnAfter {
 			doc = result.Upserted
 		}
-	} else if len(result.Modified) > 0 {
+	} else if len(result.Matched) > 0 {
 		doc = result.Matched[0]
-		if returnAfter {
+		if returnAfter && len(result.Modified) > 0 {
 			doc = result.Modified[0]
 		}
 	}
@@ -877,9 +877,9 @@ func (c *Collection) FindOneAndUpdate(ctx context.Context, filter, update interf
 		if returnAfter {
 			doc = result.Upserted
 		}
-	} else if len(result.Modified) > 0 {
+	} else if len(result.Matched) > 0 {
 		doc = result.Matched[0]
-		if returnAfter {
+		if returnAfter && len(result.Modified) > 0 {
 			doc = result.Modified[0]
 		}
 	}
