@@ -108,6 +108,7 @@ type IIndexView interface {
 	CreateOne(context.Context, mongo.IndexModel, ...*options.CreateIndexesOptions) (string, error)
 	DropAll(context.Context, ...*options.DropIndexesOptions) (bson.Raw, error)
 	DropOne(context.Context, string, ...*options.DropIndexesOptions) (bson.Raw, error)
+	DropOneWithKey(context.Context, interface{}, ...*options.DropIndexesOptions) (bson.Raw, error)
 	List(context.Context, ...*options.ListIndexesOptions) (ICursor, error)
 	ListSpecifications(context.Context, ...*options.ListIndexesOptions) ([]*mongo.IndexSpecification, error)
 }

@@ -206,6 +206,11 @@ func (m *MongoIndexView) DropOne(ctx context.Context, name string, opts ...*opti
 	return m.IndexView.DropOne(ensureContext(ctx), name, opts...)
 }
 
+// DropOneWithKey implements the IIndexView.DropOneWithKey method.
+func (m *MongoIndexView) DropOneWithKey(ctx context.Context, keySpec interface{}, opts ...*options.DropIndexesOptions) (bson.Raw, error) {
+	return m.IndexView.DropOneWithKey(ensureContext(ctx), keySpec, opts...)
+}
+
 // List implements the IIndexView.List method.
 func (m *MongoIndexView) List(ctx context.Context, opts ...*options.ListIndexesOptions) (ICursor, error) {
 	return m.IndexView.List(ctx, opts...)

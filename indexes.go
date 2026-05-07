@@ -209,6 +209,46 @@ func (v *IndexView) DropOne(ctx context.Context, name string, opts ...*options.D
 	return nil, nil
 }
 
+// DropOneWithKey implements the IIndexView.DropOneWithKey method.
+func (v *IndexView) DropOneWithKey(ctx context.Context, keySpec interface{}, opts ...*options.DropIndexesOptions) (bson.Raw, error) {
+	// merge options
+	opt := options.MergeDropIndexesOptions(opts...)
+
+	// assert supported options
+	assertOptions(opt, map[string]string{
+		"MaxTime": ignored,
+	})
+
+	// transform key
+	key, err := bsonkit.Transform(keySpec)
+	if err != nil {
+		return nil, err
+	}
+
+	// begin transaction
+	txn, err := v.engine.Begin(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// ensure abortion
+	defer v.engine.Abort(txn)
+
+	// drop index by key
+	err = txn.DropIndexByKey(v.handle, key)
+	if err != nil {
+		return nil, err
+	}
+
+	// commit transaction
+	err = v.engine.Commit(txn)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 // List implements the IIndexView.List method.
 func (v *IndexView) List(ctx context.Context, opts ...*options.ListIndexesOptions) (ICursor, error) {
 	// merge options

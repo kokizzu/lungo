@@ -1003,6 +1003,63 @@ func (t *Transaction) DropIndex(handle Handle, name string) error {
 	return nil
 }
 
+// DropIndexByKey will drop the index with the specified key in the specified
+// namespace.
+func (t *Transaction) DropIndexByKey(handle Handle, key bsonkit.Doc) error {
+	// acquire write lock
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
+	// validate handle
+	err := handle.Validate(true)
+	if err != nil {
+		return err
+	}
+
+	// check access
+	if handle[0] == Local {
+		return fmt.Errorf("namespace local.* is read only")
+	}
+
+	// check namespace
+	if t.catalog.Namespaces[handle] == nil {
+		return fmt.Errorf("missing namespace %q", handle.String())
+	}
+
+	// find index by key
+	var name string
+	for n, index := range t.catalog.Namespaces[handle].Indexes {
+		if bsonkit.Compare(*index.Config().Key, *key) == 0 {
+			name = n
+			break
+		}
+	}
+	if name == "" {
+		return fmt.Errorf("missing index for key")
+	}
+
+	// clone catalog
+	clone := t.catalog.Clone()
+
+	// clone namespace
+	namespace := clone.Namespaces[handle].Clone()
+	clone.Namespaces[handle] = namespace
+
+	// drop index
+	dropped, err := namespace.DropIndex(name)
+	if err != nil {
+		return err
+	}
+
+	// set catalog and flag
+	if len(dropped) > 0 {
+		t.catalog = clone
+		t.dirty = true
+	}
+
+	return nil
+}
+
 // Dirty will return whether the transaction contains changes.
 func (t *Transaction) Dirty() bool {
 	// acquire read lock
