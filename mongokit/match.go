@@ -274,22 +274,57 @@ func matchExists(_ Context, doc bsonkit.Doc, _, path string, v interface{}) erro
 }
 
 func matchType(_ Context, doc bsonkit.Doc, name, path string, v interface{}) error {
-	// TODO: Support type arrays.
+	// prepare operands
+	var operands []interface{}
+	if arr, ok := v.(bson.A); ok {
+		if len(arr) == 0 {
+			return fmt.Errorf("%s: must match at least one type", name)
+		}
+		operands = arr
+	} else {
+		operands = []interface{}{v}
+	}
 
-	// resolve the requested type once, before unwinding
+	// resolve types
 	var matchNumberClass bool
-	var wantType bsontype.Type
+	var wantTypes []bsontype.Type
+	for _, operand := range operands {
+		numberClass, typ, err := resolveType(name, operand)
+		if err != nil {
+			return err
+		}
+		if numberClass {
+			matchNumberClass = true
+		} else {
+			wantTypes = append(wantTypes, typ)
+		}
+	}
+
+	return matchUnwind(doc, path, true, false, func(field interface{}) error {
+		class, typ := bsonkit.Inspect(field)
+		if matchNumberClass && class == bsonkit.Number {
+			return nil
+		}
+		for _, wantType := range wantTypes {
+			if wantType == typ {
+				return nil
+			}
+		}
+		return ErrNotMatched
+	})
+}
+
+func resolveType(name string, v interface{}) (bool, bsontype.Type, error) {
 	switch value := v.(type) {
 	case string:
 		if value == "number" {
-			matchNumberClass = true
-		} else {
-			vt, ok := bsonkit.Alias2Type[value]
-			if !ok {
-				return fmt.Errorf("%s: unknown type string", name)
-			}
-			wantType = vt
+			return true, 0, nil
 		}
+		vt, ok := bsonkit.Alias2Type[value]
+		if !ok {
+			return false, 0, fmt.Errorf("%s: unknown type string", name)
+		}
+		return false, vt, nil
 	case int32, int64, float64:
 		// coerce to integer; reject fractional or out-of-range values
 		var n int64
@@ -300,33 +335,21 @@ func matchType(_ Context, doc bsonkit.Doc, name, path string, v interface{}) err
 			n = nn
 		case float64:
 			if nn != float64(int64(nn)) {
-				return fmt.Errorf("%s: expected integer", name)
+				return false, 0, fmt.Errorf("%s: expected integer", name)
 			}
 			n = int64(nn)
 		}
 		if n < 0 || n > 0xFF {
-			return fmt.Errorf("%s: type number out of range", name)
+			return false, 0, fmt.Errorf("%s: type number out of range", name)
 		}
 		vt, ok := bsonkit.Number2Type[byte(n)]
 		if !ok {
-			return fmt.Errorf("%s: unknown type number", name)
+			return false, 0, fmt.Errorf("%s: unknown type number", name)
 		}
-		wantType = vt
+		return false, vt, nil
 	default:
-		return fmt.Errorf("%s: expected string or number", name)
+		return false, 0, fmt.Errorf("%s: expected string or number", name)
 	}
-
-	return matchUnwind(doc, path, true, false, func(field interface{}) error {
-		class, typ := bsonkit.Inspect(field)
-		if matchNumberClass {
-			if class == bsonkit.Number {
-				return nil
-			}
-		} else if wantType == typ {
-			return nil
-		}
-		return ErrNotMatched
-	})
 }
 
 func matchJSONSchema(_ Context, doc bsonkit.Doc, name, _ string, v interface{}) error {

@@ -920,6 +920,44 @@ func TestMatchType(t *testing.T) {
 			"items.v": bson.M{"$type": "double"},
 		}, false)
 	})
+
+	// $type with an array of types matches if any of the listed types match
+	matchTest(t, bson.M{
+		"foo": "bar",
+		"bar": int32(7),
+		"baz": 7.0,
+	}, func(fn func(bson.M, interface{})) {
+		// array containing the matching string type
+		fn(bson.M{
+			"foo": bson.M{"$type": bson.A{"string", "int"}},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$type": bson.A{"double", "int"}},
+		}, false)
+
+		// array mixing string aliases and type numbers
+		fn(bson.M{
+			"bar": bson.M{"$type": bson.A{"string", int32(16)}},
+		}, true)
+
+		// "number" inside an array still matches the number class
+		fn(bson.M{
+			"baz": bson.M{"$type": bson.A{"string", "number"}},
+		}, true)
+
+		// empty array is rejected
+		fn(bson.M{
+			"foo": bson.M{"$type": bson.A{}},
+		}, "$type: must match at least one type")
+
+		// invalid element propagates its error
+		fn(bson.M{
+			"foo": bson.M{"$type": bson.A{"string", true}},
+		}, "$type: expected string or number")
+		fn(bson.M{
+			"foo": bson.M{"$type": bson.A{"string", "foo"}},
+		}, "$type: unknown type string")
+	})
 }
 
 func TestMatchNeArray(t *testing.T) {
