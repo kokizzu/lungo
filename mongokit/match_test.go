@@ -1205,6 +1205,36 @@ func TestMatchSize(t *testing.T) {
 			"bar": bson.M{"$size": int32(-1)},
 		}, "$size: size must be non-negative")
 	})
+
+	// $size must not recurse into arrays of arrays
+	matchTest(t, bson.M{
+		"foo": bson.A{bson.A{1, 2, 3}},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$size": int32(1)},
+		}, true)
+		fn(bson.M{
+			"foo": bson.M{"$size": int32(3)},
+		}, false)
+	})
+
+	// $size on a path traversing a subdocument array checks each child array
+	matchTest(t, bson.M{
+		"baz": bson.A{
+			bson.M{"qux": bson.A{1, 2, 3}},
+			bson.M{"qux": bson.A{4, 5}},
+		},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"baz.qux": bson.M{"$size": int32(3)},
+		}, true)
+		fn(bson.M{
+			"baz.qux": bson.M{"$size": int32(2)},
+		}, true)
+		fn(bson.M{
+			"baz.qux": bson.M{"$size": int32(4)},
+		}, false)
+	})
 }
 
 func TestMatchElem(t *testing.T) {

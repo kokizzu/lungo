@@ -430,20 +430,35 @@ func matchSize(_ Context, doc bsonkit.Doc, name, path string, v interface{}) err
 		return fmt.Errorf("%s: expected number", name)
 	}
 
-	// reject negative sizes; MongoDB errors instead of silently never matching
+	// reject negative sizes
 	if size < 0 {
 		return fmt.Errorf("%s: size must be non-negative", name)
 	}
 
-	return matchUnwind(doc, path, false, false, func(field interface{}) error {
-		// compare length if array
-		array, ok := field.(bson.A)
-		if ok && int64(len(array)) == size {
-			return nil
-		}
+	// get value (do not unwind: $size compares against the array at the path,
+	// not its elements)
+	value, multi := bsonkit.All(doc, path, false, false)
 
+	// check each per-subdocument value when the path crossed a subdoc array
+	if multi {
+		arr, ok := value.(bson.A)
+		if !ok {
+			return ErrNotMatched
+		}
+		for _, item := range arr {
+			if a, ok := item.(bson.A); ok && int64(len(a)) == size {
+				return nil
+			}
+		}
 		return ErrNotMatched
-	})
+	}
+
+	// compare length if array
+	if arr, ok := value.(bson.A); ok && int64(len(arr)) == size {
+		return nil
+	}
+
+	return ErrNotMatched
 }
 
 func matchElem(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
