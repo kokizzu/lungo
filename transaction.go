@@ -777,7 +777,7 @@ func (t *Transaction) ListDatabases(query bsonkit.Doc) (bsonkit.List, error) {
 	}
 
 	// sort by name for deterministic order
-	bsonkit.Sort(list, []bsonkit.Column{{Path: "name"}}, true)
+	bsonkit.Sort(list, []bsonkit.Column{{Path: "name"}})
 
 	return list, nil
 }
@@ -827,7 +827,7 @@ func (t *Transaction) ListCollections(handle Handle, query bsonkit.Doc) (bsonkit
 	}
 
 	// sort by name for deterministic order
-	bsonkit.Sort(list, []bsonkit.Column{{Path: "name"}}, true)
+	bsonkit.Sort(list, []bsonkit.Column{{Path: "name"}})
 
 	return list, nil
 }
@@ -908,7 +908,7 @@ func (t *Transaction) ListIndexes(handle Handle) (bsonkit.List, error) {
 	// sort list
 	bsonkit.Sort(list, []bsonkit.Column{
 		{Path: "name"},
-	}, true)
+	})
 
 	return list, nil
 }

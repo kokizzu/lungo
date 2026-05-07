@@ -53,7 +53,7 @@ func Sort(list bsonkit.List, doc bsonkit.Doc) (bsonkit.List, error) {
 	}
 
 	// sort list
-	bsonkit.Sort(result, columns, true)
+	bsonkit.Sort(result, columns)
 
 	return result, nil
 }

@@ -12,10 +12,11 @@ type Column struct {
 }
 
 // Sort will sort the list of documents in-place based on the specified columns.
-func Sort(list List, columns []Column, identity bool) {
-	// sort slice by comparing values
-	sort.Slice(list, func(i, j int) bool {
-		return Order(list[i], list[j], columns, identity) < 0
+// Documents with equal column values retain their original (insertion) order,
+// matching MongoDB's stable-sort semantics.
+func Sort(list List, columns []Column) {
+	sort.SliceStable(list, func(i, j int) bool {
+		return Order(list[i], list[j], columns, false) < 0
 	})
 }
 

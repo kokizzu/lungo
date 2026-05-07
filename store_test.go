@@ -162,7 +162,7 @@ func TestFileStore(t *testing.T) {
 	}, res.Matched)
 
 	databases, err := txn.ListDatabases(bsonkit.MustConvert(bson.M{}))
-	bsonkit.Sort(databases, []bsonkit.Column{{Path: "name"}}, true)
+	bsonkit.Sort(databases, []bsonkit.Column{{Path: "name"}})
 	assert.NoError(t, err)
 	assert.Equal(t, bson.A{
 		"foo",
