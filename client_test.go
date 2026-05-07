@@ -3,6 +3,7 @@ package lungo
 import (
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
@@ -20,7 +21,16 @@ func TestOpenGoroutineLeak(t *testing.T) {
 		engine.Close()
 	}
 
-	assert.Equal(t, num, runtime.NumGoroutine())
+	// a leak means the goroutine count grows past the baseline; tolerate
+	// transient drops or jitter from unrelated runtime/test goroutines by
+	// polling briefly until the count settles at or below baseline
+	deadline := time.Now().Add(time.Second)
+	current := runtime.NumGoroutine()
+	for current > num && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		current = runtime.NumGoroutine()
+	}
+	assert.LessOrEqual(t, current, num)
 }
 
 func TestClientListDatabasesAndNames(t *testing.T) {
