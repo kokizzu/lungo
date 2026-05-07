@@ -131,5 +131,14 @@ func TestExtract(t *testing.T) {
 				"$gt": 1.0,
 			},
 		}, bson.M{})
+
+		// multi-branch $or yields no seed even when branches share constants;
+		// MongoDB does not intersect across branches
+		fn(bson.M{
+			"$or": bson.A{
+				bson.M{"foo": "bar", "type": "user"},
+				bson.M{"baz": "qux", "type": "user"},
+			},
+		}, bson.M{})
 	})
 }
