@@ -15,6 +15,7 @@ func init() {
 	// register expression projection operators
 	ProjectionExpressionOperators[""] = projectCondition
 	ProjectionExpressionOperators["$slice"] = projectSlice
+	ProjectionExpressionOperators["$elemMatch"] = projectElemMatch
 }
 
 type projectState struct {
@@ -22,6 +23,7 @@ type projectState struct {
 	include []string
 	exclude []string
 	merge   map[string]interface{}
+	skip    map[string]bool
 }
 
 // ProjectList will apply the provided projection to the specified list.
@@ -43,6 +45,7 @@ func Project(doc, projection bsonkit.Doc) (bsonkit.Doc, error) {
 	// prepare state
 	state := projectState{
 		merge: map[string]interface{}{},
+		skip:  map[string]bool{},
 	}
 
 	// process projection
@@ -75,6 +78,12 @@ func Project(doc, projection bsonkit.Doc) (bsonkit.Doc, error) {
 
 		// copy included fields
 		for _, path := range state.include {
+			// skip paths that should not be copied from the original
+			// document (e.g. $elemMatch overrides, where the merge step
+			// supplies the value or leaves it absent on no match)
+			if state.skip[path] {
+				continue
+			}
 			value := bsonkit.Get(doc, path)
 			if value != bsonkit.Missing {
 				_, err = bsonkit.Put(res, path, value, false)
@@ -240,4 +249,53 @@ func projectSliceInt(v interface{}) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func projectElemMatch(ctx Context, doc bsonkit.Doc, _, path string, v interface{}) error {
+	// get state
+	state := ctx.Value.(*projectState)
+
+	// get query
+	query, ok := v.(bson.D)
+	if !ok {
+		return fmt.Errorf("$elemMatch: expected document")
+	}
+
+	// $elemMatch is inclusion-style: the projection only emits _id and the
+	// targeted field. Mark the path as included but skipped so the
+	// inclusion phase does not copy the original array.
+	state.include = append(state.include, path)
+	state.skip[path] = true
+
+	// get array (non-array values: field is omitted)
+	array, ok := bsonkit.Get(doc, path).(bson.A)
+	if !ok {
+		return nil
+	}
+
+	// build a query context for matching individual array elements
+	queryCtx := Context{
+		TopLevel:   TopLevelQueryOperators,
+		Expression: ExpressionQueryOperators,
+	}
+
+	// find first matching element
+	for _, item := range array {
+		virtual := bson.D{
+			bson.E{Key: "item", Value: item},
+		}
+		err := Process(queryCtx, &virtual, query, "item", false)
+		if err == ErrNotMatched {
+			continue
+		} else if err != nil {
+			return err
+		}
+
+		// emit single-element array via merge
+		state.merge[path] = bson.A{item}
+
+		return nil
+	}
+
+	return nil
 }

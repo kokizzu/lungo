@@ -373,3 +373,91 @@ func TestProjectSliceArray(t *testing.T) {
 		})
 	})
 }
+
+func TestProjectElemMatch(t *testing.T) {
+	id := primitive.NewObjectID()
+
+	// match found: returns single-element array, only _id and field
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": bson.A{
+			bson.M{"a": int32(1)},
+			bson.M{"a": int32(2)},
+			bson.M{"a": int32(3)},
+		},
+		"bar": "ignored",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$elemMatch": bson.M{"a": int32(2)}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{bson.M{"a": int32(2)}},
+		})
+	})
+
+	// no match: field omitted, _id still returned
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": bson.A{
+			bson.M{"a": int32(1)},
+			bson.M{"a": int32(2)},
+		},
+		"bar": "ignored",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$elemMatch": bson.M{"a": int32(99)}},
+		}, bson.M{
+			"_id": id,
+		})
+	})
+
+	// $elemMatch combined with explicit field inclusion
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": bson.A{
+			bson.M{"a": int32(1)},
+			bson.M{"a": int32(2)},
+		},
+		"bar": "kept",
+		"qux": "dropped",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$elemMatch": bson.M{"a": int32(1)}},
+			"bar": int32(1),
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{bson.M{"a": int32(1)}},
+			"bar": "kept",
+		})
+	})
+
+	// match using comparison operator
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": bson.A{
+			bson.M{"a": int32(1)},
+			bson.M{"a": int32(5)},
+			bson.M{"a": int32(10)},
+		},
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$elemMatch": bson.M{"a": bson.M{"$gte": int32(5)}}},
+		}, bson.M{
+			"_id": id,
+			"foo": bson.A{bson.M{"a": int32(5)}},
+		})
+	})
+
+	// non-array field: omitted from result
+	projectTest(t, bson.M{
+		"_id": id,
+		"foo": "not an array",
+		"bar": "ignored",
+	}, func(fn func(bson.M, interface{})) {
+		fn(bson.M{
+			"foo": bson.M{"$elemMatch": bson.M{"a": int32(1)}},
+		}, bson.M{
+			"_id": id,
+		})
+	})
+}
