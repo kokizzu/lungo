@@ -580,6 +580,37 @@ func TestCollectionFind(t *testing.T) {
 	})
 }
 
+func TestCollectionFindSortArrayValuedField(t *testing.T) {
+	collectionTest(t, func(t *testing.T, c ICollection) {
+		_, err := c.InsertMany(nil, bson.A{
+			bson.D{{Key: "tag", Value: "a"}, {Key: "v", Value: bson.A{int32(3), int32(1)}}},
+			bson.D{{Key: "tag", Value: "b"}, {Key: "v", Value: bson.A{int32(2)}}},
+			bson.D{{Key: "tag", Value: "c"}, {Key: "v", Value: bson.A{int32(5), int32(0)}}},
+		})
+		assert.NoError(t, err)
+
+		// ascending: min(a)=1, min(b)=2, min(c)=0 → c, a, b
+		csr, err := c.Find(nil, bson.M{}, options.Find().SetSort(bson.D{{Key: "v", Value: 1}}))
+		assert.NoError(t, err)
+		got := readAll(csr)
+		tags := make([]string, len(got))
+		for i, d := range got {
+			tags[i] = d["tag"].(string)
+		}
+		assert.Equal(t, []string{"c", "a", "b"}, tags)
+
+		// descending: max(a)=3, max(b)=2, max(c)=5 → c, a, b
+		csr, err = c.Find(nil, bson.M{}, options.Find().SetSort(bson.D{{Key: "v", Value: -1}}))
+		assert.NoError(t, err)
+		got = readAll(csr)
+		tags = make([]string, len(got))
+		for i, d := range got {
+			tags[i] = d["tag"].(string)
+		}
+		assert.Equal(t, []string{"c", "a", "b"}, tags)
+	})
+}
+
 func TestCollectionFindOne(t *testing.T) {
 	// missing database
 	clientTest(t, func(t *testing.T, client IClient) {
