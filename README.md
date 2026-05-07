@@ -87,7 +87,7 @@ On a high level, lungo provides the following features (unchecked features are
 planned to be implemented):
 
 - [x] CRUD, Index Management and Namespace Management
-- [x] Single, Compound and Partial Indexes
+- [x] Single, Compound, Multikey and Partial Indexes
 - [ ] Index Supported Sorting & Filtering
 - [x] Sessions & Multi-Document Transactions
 - [x] Oplog & Change Streams
@@ -113,35 +113,43 @@ administrative and diagnostics commands e.g. `renameCollection` and `explain`.
 Leveraging the `mongokit.Match` function, lungo supports the following query
 operators:
 
-- `$and`, `$or`, `$nor`, (`$not`)
+- `$and`, `$or`, `$nor`, `$not`
 - `$eq`, `$gt`, `$lt`, `$gte`, `$lte`, `$ne`
-- (`$in`), (`$nin`), `$exist`, `$type`
+- `$in`, `$nin`, `$exists`, `$type`
 - `$jsonSchema`, `$all`, `$size`, `$elemMatch`
+- `$mod`, `$bitsAllClear`, `$bitsAllSet`, `$bitsAnyClear`, `$bitsAnySet`
+
+The `$expr`, `$regex`, `$where`, `$text` and the geospatial operators
+(`$geoWithin`, `$geoIntersects`, `$near`, `$nearSphere`) are not yet supported.
 
 And the `mongokit.Apply` function currently supports the following update
 operators:
 
 - `$set`, `$setOnInsert`, `$unset`, `$rename`
-- `$inc`, `$mul`, `$max`, `$min`, (`$push`)
-- `$pop`, `$currentDate`, `$[]`, `$[<identifier>]`
+- `$inc`, `$mul`, `$max`, `$min`, `$currentDate`
+- `$push` (with `$each`, `$position`, `$sort`, `$slice` modifiers)
+- `$pop`, `$pull`, `$pullAll`, `$addToSet`, `$bit`
+- `$[]`, `$[<identifier>]`
+
+The implicit positional operator `$` is not yet supported.
 
 Finally, the `mongokit.Project` function currently supports the following
 projection operators:
 
-- `$slice`
+- `$slice`, `$elemMatch`
 
-Operators in braces are only partially supported, see comments in code.
+The `$` (positional) and `$meta` projection operators are not yet supported.
 
-### Single, Compound and Partial Indexes
+### Single, Compound, Multikey and Partial Indexes
 
-The `mongokit.Index` type supports single field and compound indexes that
-optionally enforce uniqueness or index a subset of documents using a partial
-filter expression. Single field indexes also support the automated expiry of
-documents aka. TTL indexes.
+The `mongokit.Index` type supports single field, compound and multikey indexes
+that optionally enforce uniqueness or index a subset of documents using a
+partial filter expression. Single field indexes also support the automated
+expiry of documents aka. TTL indexes.
 
-The more advanced multikey, geospatial, text, and hashed indexes are not yet
-supported and may be added later, while the deprecated sparse indexes will not.
-The recently introduced collation feature, as well as wildcard indexes, are also
+The more advanced geospatial, text, and hashed indexes are not yet supported
+and may be added later, while the deprecated sparse indexes will not. The
+recently introduced collation feature, as well as wildcard indexes, are also
 subject to future development.
 
 ### Index Supported Sorting & Filtering
@@ -183,7 +191,7 @@ re-implementing the package:
 
 - Support for sessions via the `context.Context` parameter in all `lungo.Bucket`
 methods.
-- The `lungo.DowloadStream` implements the `io.Seeker` interface for convenient
+- The `lungo.DownloadStream` implements the `io.Seeker` interface for convenient
 range queries on the file contents.
 - A non-standard "tracking" mode in which in-progress uploads and deletions are
 tracked by storing a document in an additional "markers" collection. If enabled,
