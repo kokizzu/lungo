@@ -116,6 +116,10 @@ func get(v interface{}, path string, collect, compact bool) (interface{}, bool) 
 // prepends is set to true, new values are inserted at the beginning of the array
 // or document. If the path contains a number e.g. "foo.1.bar" and no array
 // exists at that levels, a document with the key "1" is created.
+//
+// Put mutates the document in place, including the underlying bson.D and
+// bson.A backing arrays. Callers that need to preserve the original must
+// Clone the document beforehand.
 func Put(doc Doc, path string, value interface{}, prepend bool) (interface{}, error) {
 	// check value
 	if value == Missing {
@@ -137,6 +141,10 @@ func Put(doc Doc, path string, value interface{}, prepend bool) (interface{}, er
 // and return the previously stored value. If the path specifies an array element
 // e.g. "foo.2" the element is nilled, but not removed from the array. This
 // prevents unintentional effects through position shifts in the array.
+//
+// Unset mutates the document in place, including the underlying bson.D
+// backing array. Callers that need to preserve the original must Clone the
+// document beforehand.
 func Unset(doc Doc, path string) interface{} {
 	// unset value
 	res, _ := put(*doc, path, Missing, false, func(v interface{}) {
@@ -270,6 +278,9 @@ func put(v interface{}, path string, value interface{}, prepend bool, set func(i
 // specified by path and return the new value. If the value is missing, the
 // increment is added to the document. The type of the field may be changed as
 // part of the operation.
+//
+// Like Put, Increment mutates the document in place; clone beforehand to
+// preserve the original.
 func Increment(doc Doc, path string, increment interface{}) (interface{}, error) {
 	// get field
 	field := Get(doc, path)
@@ -298,6 +309,9 @@ func Increment(doc Doc, path string, increment interface{}) (interface{}, error)
 // document specified by path and return the new value. If the value is missing,
 // a zero is added to the document. The type of the field may be changed as part
 // of the operation.
+//
+// Like Put, Multiply mutates the document in place; clone beforehand to
+// preserve the original.
 func Multiply(doc Doc, path string, multiplier interface{}) (interface{}, error) {
 	// get field
 	field := Get(doc, path)
@@ -325,6 +339,9 @@ func Multiply(doc Doc, path string, multiplier interface{}) (interface{}, error)
 // Push will add the value to the array at the location in the document
 // specified by path and return the new value. If the value is missing, the
 // value is added to a new array.
+//
+// Like Put, Push mutates the document in place; clone beforehand to
+// preserve the original.
 func Push(doc Doc, path string, value interface{}) (interface{}, error) {
 	// check value
 	if value == Missing {
@@ -357,6 +374,9 @@ func Push(doc Doc, path string, value interface{}) (interface{}, error) {
 // the document specified byt path and return the updated array. If the array is
 // empty, the value is missing or not an array, it will do nothing and return
 // Missing.
+//
+// Like Put, Pop mutates the document in place; clone beforehand to
+// preserve the original.
 func Pop(doc Doc, path string, last bool) (interface{}, error) {
 	// get field
 	field := Get(doc, path)
