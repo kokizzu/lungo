@@ -414,23 +414,28 @@ func matchAll(_ Context, doc bsonkit.Doc, name, path string, v interface{}) erro
 }
 
 func matchSize(_ Context, doc bsonkit.Doc, name, path string, v interface{}) error {
-	return matchUnwind(doc, path, false, false, func(field interface{}) error {
-		// require an integer value (int32, int64 or whole-valued float64)
-		var size int64
-		switch n := v.(type) {
-		case int32:
-			size = int64(n)
-		case int64:
-			size = n
-		case float64:
-			if n != float64(int64(n)) {
-				return fmt.Errorf("%s: expected integer", name)
-			}
-			size = int64(n)
-		default:
-			return fmt.Errorf("%s: expected number", name)
+	// require an integer value (int32, int64 or whole-valued float64)
+	var size int64
+	switch n := v.(type) {
+	case int32:
+		size = int64(n)
+	case int64:
+		size = n
+	case float64:
+		if n != float64(int64(n)) {
+			return fmt.Errorf("%s: expected integer", name)
 		}
+		size = int64(n)
+	default:
+		return fmt.Errorf("%s: expected number", name)
+	}
 
+	// reject negative sizes; MongoDB errors instead of silently never matching
+	if size < 0 {
+		return fmt.Errorf("%s: size must be non-negative", name)
+	}
+
+	return matchUnwind(doc, path, false, false, func(field interface{}) error {
 		// compare length if array
 		array, ok := field.(bson.A)
 		if ok && int64(len(array)) == size {

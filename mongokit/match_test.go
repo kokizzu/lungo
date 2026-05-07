@@ -1195,10 +1195,15 @@ func TestMatchSize(t *testing.T) {
 			"bar": bson.M{"$size": 2.0},
 		}, true)
 
-		// fractional float is rejected (regression: previously matched none)
+		// fractional float is rejected
 		fn(bson.M{
 			"bar": bson.M{"$size": 1.5},
 		}, "$size: expected integer")
+
+		// negative size is rejected
+		fn(bson.M{
+			"bar": bson.M{"$size": int32(-1)},
+		}, "$size: size must be non-negative")
 	})
 }
 
