@@ -184,17 +184,21 @@ func applyRename(ctx Context, doc bsonkit.Doc, name, path string, v interface{})
 		return fmt.Errorf("%s: source and target paths cannot overlap", name)
 	}
 
-	// unset old value
-	value := bsonkit.Unset(doc, path)
+	// read source without mutating; if absent, $rename is a no-op
+	value := bsonkit.Get(doc, path)
 	if value == bsonkit.Missing {
 		return nil
 	}
 
-	// set new value
+	// write to target first; if this fails, the document is unchanged and
+	// the error is surfaced atomically rather than after a partial mutation
 	_, err := bsonkit.Put(doc, newPath, value, false)
 	if err != nil {
 		return err
 	}
+
+	// remove the source only after the target write succeeded
+	bsonkit.Unset(doc, path)
 
 	// record remove
 	err = ctx.Value.(*Changes).Record(path, bsonkit.Missing)

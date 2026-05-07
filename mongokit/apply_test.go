@@ -649,6 +649,24 @@ func TestApplyRename(t *testing.T) {
 			"foo.baz": "baz",
 		},
 	}, changes)
+
+	// when the destination Put fails the document must be left unchanged
+	// (atomicity): renaming "a" into "b.c" where "b" is a scalar must not
+	// remove "a"
+	doc := bsonkit.MustConvert(bson.M{
+		"a": int32(1),
+		"b": int32(2),
+	})
+	_, err = Apply(doc, nil, bsonkit.MustConvert(bson.M{
+		"$rename": bson.M{
+			"a": "b.c",
+		},
+	}), false, nil)
+	assert.Error(t, err)
+	assert.Equal(t, bsonkit.MustConvert(bson.M{
+		"a": int32(1),
+		"b": int32(2),
+	}), doc)
 }
 
 func TestApplyInc(t *testing.T) {
