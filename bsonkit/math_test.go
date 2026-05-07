@@ -115,3 +115,20 @@ func TestArithmeticNonFiniteFloatWithDecimal128(t *testing.T) {
 		assert.NotPanics(t, func() { Mod(d128("5"), special) })
 	}
 }
+
+func TestModZeroDivisorNoPanic(t *testing.T) {
+	assert.NotPanics(t, func() {
+		assert.Equal(t, Missing, Mod(int32(5), int32(0)))
+		assert.Equal(t, Missing, Mod(int32(5), int64(0)))
+		assert.Equal(t, Missing, Mod(int64(5), int32(0)))
+		assert.Equal(t, Missing, Mod(int64(5), int64(0)))
+		assert.Equal(t, Missing, Mod(float64(5), int32(0)))
+		assert.Equal(t, Missing, Mod(float64(5), int64(0)))
+		assert.Equal(t, Missing, Mod(d128("5"), int32(0)))
+		assert.Equal(t, Missing, Mod(d128("5"), int64(0)))
+		assert.Equal(t, Missing, Mod(int32(5), d128("0")))
+		assert.Equal(t, Missing, Mod(int64(5), d128("0")))
+		assert.Equal(t, Missing, Mod(float64(5), d128("0")))
+		assert.Equal(t, Missing, Mod(d128("5"), d128("0")))
+	})
+}

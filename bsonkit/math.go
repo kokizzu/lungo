@@ -169,8 +169,28 @@ func Mul(num, mul interface{}) interface{} {
 }
 
 // Mod will compute the modulo of the two values. It accepts and returns int32,
-// in64, float64 and decimal128.
+// in64, float64 and decimal128. A zero divisor returns Missing, except for
+// float64 divisors that return NaN.
 func Mod(num, div interface{}) interface{} {
+	// guard against zero divisors that would otherwise panic at runtime;
+	// non-finite Decimal128 divisors are still handled downstream by
+	// safeDecMod after safeD128ToDec collapses them to zero
+	switch d := div.(type) {
+	case int32:
+		if d == 0 {
+			return Missing
+		}
+	case int64:
+		if d == 0 {
+			return Missing
+		}
+	case primitive.Decimal128:
+		if dec, _, err := d.BigInt(); err == nil && dec.Sign() == 0 {
+			return Missing
+		}
+	}
+
+	// calculate modulo
 	switch num := num.(type) {
 	case int32:
 		switch div := div.(type) {
