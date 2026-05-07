@@ -176,14 +176,17 @@ func (i *Index) tuples(doc Doc) [][]interface{} {
 
 	// extend with each column
 	for _, col := range i.columns {
-		// get value at path
-		v := Get(doc, col.Path)
+		// get value at path, collecting through arrays of embedded documents
+		// and flattening nested arrays so multikey works on paths like
+		// "pets.name" or "pets.tags"
+		v, _ := All(doc, col.Path, true, true)
 
-		// expand arrays, treat empty arrays as missing
+		// expand arrays; an empty array indexes under itself, distinct from
+		// Missing, matching MongoDB's empty-array key
 		var values []interface{}
 		if a, ok := v.(bson.A); ok {
 			if len(a) == 0 {
-				values = []interface{}{Missing}
+				values = []interface{}{a}
 			} else {
 				values = a
 			}

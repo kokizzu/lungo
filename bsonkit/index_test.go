@@ -278,6 +278,81 @@ func TestIndexMultiKey(t *testing.T) {
 	assert.Equal(t, List{d2}, index.List())
 }
 
+func TestIndexMultiKeyNested(t *testing.T) {
+	// path traverses an array of embedded docs — MongoDB multikey expands
+	// each pet's name into a separate index entry
+	d1 := MustConvert(bson.M{"pets": bson.A{
+		bson.M{"name": "fido"},
+		bson.M{"name": "rex"},
+	}})
+	d2 := MustConvert(bson.M{"pets": bson.A{
+		bson.M{"name": "rex"},
+	}})
+
+	index := NewIndex(true, []Column{
+		{Path: "pets.name"},
+	})
+
+	ok := index.Add(d1)
+	assert.True(t, ok)
+
+	// d2's "rex" collides with d1's "rex" — must be rejected
+	ok = index.Add(d2)
+	assert.False(t, ok)
+
+	// remove d1 frees both names
+	ok = index.Remove(d1)
+	assert.True(t, ok)
+
+	ok = index.Add(d2)
+	assert.True(t, ok)
+}
+
+func TestIndexMultiKeyNestedFlatten(t *testing.T) {
+	// path traverses an array of embedded docs whose field is itself an
+	// array — MongoDB flattens to a single set of keys
+	d1 := MustConvert(bson.M{"pets": bson.A{
+		bson.M{"tags": bson.A{"a", "b"}},
+		bson.M{"tags": bson.A{"c"}},
+	}})
+	d2 := MustConvert(bson.M{"pets": bson.A{
+		bson.M{"tags": bson.A{"b"}},
+	}})
+
+	index := NewIndex(true, []Column{
+		{Path: "pets.tags"},
+	})
+
+	ok := index.Add(d1)
+	assert.True(t, ok)
+
+	// d2's "b" collides with d1's flattened "b" — must be rejected
+	ok = index.Add(d2)
+	assert.False(t, ok)
+}
+
+func TestIndexEmptyArrayDistinctFromMissing(t *testing.T) {
+	// {tags: []} and {} must occupy distinct unique-index slots — MongoDB
+	// indexes empty arrays under the array sentinel, not under null/missing
+	d1 := MustConvert(bson.M{"tags": bson.A{}})
+	d2 := MustConvert(bson.M{})
+
+	index := NewIndex(true, []Column{
+		{Path: "tags"},
+	})
+
+	ok := index.Add(d1)
+	assert.True(t, ok)
+
+	ok = index.Add(d2)
+	assert.True(t, ok)
+
+	// a second empty-array doc still collides with d1
+	d3 := MustConvert(bson.M{"tags": bson.A{}})
+	ok = index.Add(d3)
+	assert.False(t, ok)
+}
+
 func TestIndexMultiKeyUnique(t *testing.T) {
 	d1 := MustConvert(bson.M{"tags": bson.A{"x"}})
 	d2 := MustConvert(bson.M{"tags": bson.A{"x", "y"}})
