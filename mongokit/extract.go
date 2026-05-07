@@ -66,8 +66,10 @@ func extractAnd(ctx Context, doc bsonkit.Doc, name, _ string, v interface{}) err
 			return fmt.Errorf("%s: expected array of documents", name)
 		}
 
-		// extract document
-		err := Process(ctx, doc, query, "", false)
+		// extract document; recurse with root=true so nested top-level
+		// operators (e.g. $and inside $and, $or inside $or) keep using the
+		// top-level extractor table instead of being silently dropped
+		err := Process(ctx, doc, query, "", true)
 		if err != nil {
 			return err
 		}

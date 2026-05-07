@@ -140,5 +140,33 @@ func TestExtract(t *testing.T) {
 				bson.M{"baz": "qux", "type": "user"},
 			},
 		}, bson.M{})
+
+		// nested $and inside $and: previously root=false dropped the inner
+		// $and silently because top-level operators are looked up in the
+		// expression table during nested processing
+		fn(bson.M{
+			"$and": bson.A{
+				bson.M{
+					"$and": bson.A{
+						bson.M{"foo": "bar"},
+					},
+				},
+			},
+		}, bson.M{
+			"foo": "bar",
+		})
+
+		// single-branch $or inside $and (and vice versa)
+		fn(bson.M{
+			"$and": bson.A{
+				bson.M{
+					"$or": bson.A{
+						bson.M{"foo": "bar"},
+					},
+				},
+			},
+		}, bson.M{
+			"foo": "bar",
+		})
 	})
 }
