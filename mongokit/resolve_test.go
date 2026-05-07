@@ -21,23 +21,23 @@ func resolveTest(t *testing.T, path string, query, doc bsonkit.Doc, arrayFilters
 
 func TestResolve(t *testing.T) {
 	// no operators
-	resolveTest(t, "foo", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{}), bsonkit.List{}, []string{
+	resolveTest(t, "foo", bsonkit.NewDoc(), bsonkit.NewDoc(), bsonkit.List{}, []string{
 		"foo",
 	})
-	resolveTest(t, "foo.bar.baz", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{}), bsonkit.List{}, []string{
+	resolveTest(t, "foo.bar.baz", bsonkit.NewDoc(), bsonkit.NewDoc(), bsonkit.List{}, []string{
 		"foo.bar.baz",
 	})
 
 	// no operators but index
-	resolveTest(t, "foo.0", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{}), bsonkit.List{}, []string{
+	resolveTest(t, "foo.0", bsonkit.NewDoc(), bsonkit.NewDoc(), bsonkit.List{}, []string{
 		"foo.0",
 	})
-	resolveTest(t, "foo.2.bar.7.baz", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{}), bsonkit.List{}, []string{
+	resolveTest(t, "foo.2.bar.7.baz", bsonkit.NewDoc(), bsonkit.NewDoc(), bsonkit.List{}, []string{
 		"foo.2.bar.7.baz",
 	})
 
 	// single operator
-	resolveTest(t, "foo.$[]", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[]", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{1, 2, 3},
 	}), bsonkit.List{}, []string{
 		"foo.0",
@@ -46,7 +46,7 @@ func TestResolve(t *testing.T) {
 	})
 
 	// nested operators
-	resolveTest(t, "foo.$[].bar.$[]", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[].bar.$[]", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			bson.M{
 				"bar": bson.A{1, 2},
@@ -62,7 +62,7 @@ func TestResolve(t *testing.T) {
 	})
 
 	// adjacent operators
-	resolveTest(t, "foo.$[].$[]", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[].$[]", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			bson.A{1, 2},
 			bson.A{3},
@@ -74,7 +74,7 @@ func TestResolve(t *testing.T) {
 	})
 
 	// trailing field
-	resolveTest(t, "foo.$[].$[].bar", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[].$[].bar", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			bson.A{
 				bson.M{
@@ -97,7 +97,7 @@ func TestResolve(t *testing.T) {
 	})
 
 	// trailing index
-	resolveTest(t, "foo.$[].0", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[].0", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			bson.A{1, 2},
 			bson.A{1},
@@ -110,7 +110,7 @@ func TestResolve(t *testing.T) {
 
 func TestResolveArrayFilters(t *testing.T) {
 	// single expression
-	resolveTest(t, "foo.$[af1]", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[af1]", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			"bar",
 			"baz",
@@ -128,7 +128,7 @@ func TestResolveArrayFilters(t *testing.T) {
 	})
 
 	// multiple expressions
-	resolveTest(t, "foo.$[af1].$[af2]", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[af1].$[af2]", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			bson.A{-10, 20, 30, -40, 4},
 			bson.A{10, -20, -30, 40},
@@ -150,7 +150,7 @@ func TestResolveArrayFilters(t *testing.T) {
 	})
 
 	// complex expressions
-	resolveTest(t, "foo.$[af1].bar.$[af2]", bsonkit.MustConvert(bson.M{}), bsonkit.MustConvert(bson.M{
+	resolveTest(t, "foo.$[af1].bar.$[af2]", bsonkit.NewDoc(), bsonkit.MustConvert(bson.M{
 		"foo": bson.A{
 			bson.M{
 				"ok":  true,

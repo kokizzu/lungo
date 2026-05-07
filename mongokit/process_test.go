@@ -13,8 +13,8 @@ func TestProcess(t *testing.T) {
 	/* empty */
 
 	ctx := Context{}
-	doc := bsonkit.MustConvert(bson.M{})
-	query := bsonkit.MustConvert(bson.M{})
+	doc := bsonkit.NewDoc()
+	query := bsonkit.NewDoc()
 
 	err := Process(ctx, doc, *query, "", true)
 	assert.NoError(t, err)

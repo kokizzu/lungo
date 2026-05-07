@@ -19,7 +19,7 @@ func mustHas(ok bool, err error) bool {
 
 func TestIndex(t *testing.T) {
 	index, err := CreateIndex(IndexConfig{
-		Key: bsonkit.MustConvert(bson.M{}),
+		Key: bsonkit.NewDoc(),
 	})
 	assert.Error(t, err)
 	assert.Nil(t, index)

@@ -491,7 +491,7 @@ func TestApplyUnset(t *testing.T) {
 			"$unset": bson.M{
 				"foo": nil,
 			},
-		}, nil, bsonkit.MustConvert(bson.M{}))
+		}, nil, bsonkit.NewDoc())
 	})
 
 	// changes

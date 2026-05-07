@@ -8,3 +8,8 @@ type Doc = *bson.D
 
 // List is consecutive list of documents.
 type List = []Doc
+
+// NewDoc creates and returns an empty document.
+func NewDoc() Doc {
+	return &bson.D{}
+}
