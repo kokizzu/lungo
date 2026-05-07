@@ -1632,6 +1632,20 @@ func TestApplyAddToSet(t *testing.T) {
 			assert.Equal(t, bson.M{"x": int32(1), "foo": bson.A{"a"}}, m)
 		})
 	})
+
+	// $each combined with an unknown modifier must be rejected
+	applyTest(t, false, bson.M{
+		"foo": bson.A{"a"},
+	}, func(fn func(bson.M, []bson.M, interface{})) {
+		fn(bson.M{
+			"$addToSet": bson.M{
+				"foo": bson.D{
+					{Key: "$each", Value: bson.A{"b"}},
+					{Key: "$position", Value: int32(0)},
+				},
+			},
+		}, nil, "$addToSet: unknown modifier \"$position\"")
+	})
 }
 
 func TestApplyBit(t *testing.T) {

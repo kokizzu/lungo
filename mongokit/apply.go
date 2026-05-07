@@ -762,16 +762,31 @@ func applyPullAll(ctx Context, doc bsonkit.Doc, name, path string, v interface{}
 }
 
 func applyAddToSet(ctx Context, doc bsonkit.Doc, name, path string, v interface{}) error {
-	// resolve values to add: $each unwraps to a list, anything else is a
+	// resolve values to add: a document containing $each is the modifier form
+	// (no other modifier is supported for $addToSet); anything else is a
 	// single value (which itself may be a document or array — those are
 	// treated as opaque values, just like $push)
 	var values bson.A
-	if vd, ok := v.(bson.D); ok && len(vd) == 1 && vd[0].Key == "$each" {
-		arr, ok := vd[0].Value.(bson.A)
-		if !ok {
-			return fmt.Errorf("%s: $each requires an array", name)
+	modifierForm := false
+	if vd, ok := v.(bson.D); ok {
+		for _, e := range vd {
+			if e.Key == "$each" {
+				modifierForm = true
+				break
+			}
 		}
-		values = arr
+	}
+	if modifierForm {
+		for _, e := range v.(bson.D) {
+			if e.Key != "$each" {
+				return fmt.Errorf("%s: unknown modifier %q", name, e.Key)
+			}
+			arr, ok := e.Value.(bson.A)
+			if !ok {
+				return fmt.Errorf("%s: $each requires an array", name)
+			}
+			values = arr
+		}
 	} else {
 		values = bson.A{v}
 	}
