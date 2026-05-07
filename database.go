@@ -198,6 +198,7 @@ func (d *Database) Watch(_ context.Context, pipeline interface{}, opts ...*optio
 	// assert supported options
 	assertOptions(opt, map[string]string{
 		"BatchSize":            ignored,
+		"Comment":              ignored,
 		"FullDocument":         ignored,
 		"MaxAwaitTime":         ignored,
 		"ResumeAfter":          supported,

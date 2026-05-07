@@ -32,6 +32,7 @@ func (c *Collection) BulkWrite(ctx context.Context, models []mongo.WriteModel, o
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment": ignored,
 		"Ordered": supported,
 	})
 
@@ -236,6 +237,8 @@ func (c *Collection) CountDocuments(ctx context.Context, filter interface{}, opt
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment": ignored,
+		"Hint":    ignored,
 		"Limit":   supported,
 		"MaxTime": ignored,
 		"Skip":    supported,
@@ -292,7 +295,10 @@ func (c *Collection) DeleteMany(ctx context.Context, filter interface{}, opts ..
 	opt := options.MergeDeleteOptions(opts...)
 
 	// assert supported options
-	assertOptions(opt, map[string]string{})
+	assertOptions(opt, map[string]string{
+		"Comment": ignored,
+		"Hint":    ignored,
+	})
 
 	// check filer
 	if filter == nil {
@@ -327,7 +333,10 @@ func (c *Collection) DeleteOne(ctx context.Context, filter interface{}, opts ...
 	opt := options.MergeDeleteOptions(opts...)
 
 	// assert supported options
-	assertOptions(opt, map[string]string{})
+	assertOptions(opt, map[string]string{
+		"Comment": ignored,
+		"Hint":    ignored,
+	})
 
 	// check filer
 	if filter == nil {
@@ -363,6 +372,7 @@ func (c *Collection) Distinct(ctx context.Context, field string, filter interfac
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment": ignored,
 		"MaxTime": ignored,
 	})
 
@@ -432,6 +442,7 @@ func (c *Collection) EstimatedDocumentCount(ctx context.Context, opts ...*option
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment": ignored,
 		"MaxTime": ignored,
 	})
 
@@ -453,9 +464,11 @@ func (c *Collection) Find(ctx context.Context, filter interface{}, opts ...*opti
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"AllowDiskUse":        ignored,
 		"AllowPartialResults": ignored,
 		"BatchSize":           ignored,
 		"Comment":             ignored,
+		"Hint":                ignored,
 		"Limit":               supported,
 		"MaxAwaitTime":        ignored,
 		"MaxTime":             ignored,
@@ -539,6 +552,7 @@ func (c *Collection) FindOne(ctx context.Context, filter interface{}, opts ...*o
 		"AllowPartialResults": ignored,
 		"BatchSize":           ignored,
 		"Comment":             ignored,
+		"Hint":                ignored,
 		"MaxAwaitTime":        ignored,
 		"MaxTime":             ignored,
 		"NoCursorTimeout":     ignored,
@@ -617,6 +631,8 @@ func (c *Collection) FindOneAndDelete(ctx context.Context, filter interface{}, o
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment":    ignored,
+		"Hint":       ignored,
 		"MaxTime":    ignored,
 		"Projection": supported,
 		"Sort":       supported,
@@ -685,6 +701,8 @@ func (c *Collection) FindOneAndReplace(ctx context.Context, filter, replacement 
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment":        ignored,
+		"Hint":           ignored,
 		"MaxTime":        ignored,
 		"Projection":     supported,
 		"ReturnDocument": supported,
@@ -791,12 +809,14 @@ func (c *Collection) FindOneAndUpdate(ctx context.Context, filter, update interf
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"ArrayFilters":   supported,
+		"Comment":        ignored,
+		"Hint":           ignored,
 		"MaxTime":        ignored,
 		"Projection":     supported,
 		"ReturnDocument": supported,
 		"Sort":           supported,
 		"Upsert":         supported,
-		"ArrayFilters":   supported,
 	})
 
 	// check filer
@@ -910,6 +930,7 @@ func (c *Collection) InsertMany(ctx context.Context, documents []interface{}, op
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
+		"Comment": ignored,
 		"Ordered": supported,
 	})
 
@@ -961,7 +982,9 @@ func (c *Collection) InsertOne(ctx context.Context, document interface{}, opts .
 	opt := options.MergeInsertOneOptions(opts...)
 
 	// assert supported options
-	assertOptions(opt, map[string]string{})
+	assertOptions(opt, map[string]string{
+		"Comment": ignored,
+	})
 
 	// check document
 	if document == nil {
@@ -1013,7 +1036,9 @@ func (c *Collection) ReplaceOne(ctx context.Context, filter, replacement interfa
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
-		"Upsert": supported,
+		"Comment": ignored,
+		"Hint":    ignored,
+		"Upsert":  supported,
 	})
 
 	// check filer
@@ -1096,8 +1121,10 @@ func (c *Collection) UpdateMany(ctx context.Context, filter, update interface{},
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
-		"Upsert":       supported,
 		"ArrayFilters": supported,
+		"Comment":      ignored,
+		"Hint":         ignored,
+		"Upsert":       supported,
 	})
 
 	// check filer
@@ -1169,8 +1196,10 @@ func (c *Collection) UpdateOne(ctx context.Context, filter, update interface{}, 
 
 	// assert supported options
 	assertOptions(opt, map[string]string{
-		"Upsert":       supported,
 		"ArrayFilters": supported,
+		"Comment":      ignored,
+		"Hint":         ignored,
+		"Upsert":       supported,
 	})
 
 	// check filer
@@ -1243,6 +1272,7 @@ func (c *Collection) Watch(_ context.Context, pipeline interface{}, opts ...*opt
 	// assert supported options
 	assertOptions(opt, map[string]string{
 		"BatchSize":            ignored,
+		"Comment":              ignored,
 		"FullDocument":         ignored,
 		"MaxAwaitTime":         ignored,
 		"ResumeAfter":          supported,
