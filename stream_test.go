@@ -52,9 +52,11 @@ func TestStream(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -103,9 +105,11 @@ func TestStream(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -150,9 +154,11 @@ func TestStream(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -206,9 +212,11 @@ func TestStream(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -254,9 +262,11 @@ func TestStream(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -407,9 +417,11 @@ func TestStreamArrayChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -452,9 +464,11 @@ func TestStreamArrayChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -507,9 +521,11 @@ func TestStreamArrayChanges(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -689,9 +705,11 @@ func TestStreamResumption(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id2,
 			},
@@ -724,9 +742,11 @@ func TestStreamResumption(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id2,
 			},
@@ -759,9 +779,11 @@ func TestStreamResumption(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -833,9 +855,11 @@ func TestStreamInvalidationCollection(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"ns": bson.M{
 				"db":   c.Database().Name(),
 				"coll": c.Name(),
@@ -853,9 +877,11 @@ func TestStreamInvalidationCollection(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":           event["_id"],
 			"clusterTime":   event["clusterTime"],
+			"wallTime":      event["wallTime"],
 			"operationType": "invalidate",
 		}, event)
 
@@ -952,9 +978,11 @@ func TestStreamInvalidationDatabase(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"ns": bson.M{
 				"db":   db.Name(),
 				"coll": "foo",
@@ -970,9 +998,11 @@ func TestStreamInvalidationDatabase(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"ns": bson.M{
 				"db": db.Name(),
 			},
@@ -989,9 +1019,11 @@ func TestStreamInvalidationDatabase(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":           event["_id"],
 			"clusterTime":   event["clusterTime"],
+			"wallTime":      event["wallTime"],
 			"operationType": "invalidate",
 		}, event)
 
@@ -1033,9 +1065,11 @@ func TestStreamInvalidationClient(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"ns": bson.M{
 				"db":   db.Name(),
 				"coll": "foo",
@@ -1051,9 +1085,11 @@ func TestStreamInvalidationClient(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"ns": bson.M{
 				"db": db.Name(),
 			},
@@ -1101,9 +1137,11 @@ func TestStreamIsolationCollection(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},
@@ -1153,9 +1191,11 @@ func TestStreamIsolationDatabase(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEmpty(t, event["_id"])
 		assert.NotEmpty(t, event["clusterTime"])
+		assert.NotEmpty(t, event["wallTime"])
 		assert.Equal(t, bson.M{
 			"_id":         event["_id"],
 			"clusterTime": event["clusterTime"],
+			"wallTime":    event["wallTime"],
 			"documentKey": bson.M{
 				"_id": id1,
 			},

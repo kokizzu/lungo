@@ -21,8 +21,8 @@ func TestFileStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, engine)
 
-	get := func(i int, name string) primitive.Timestamp {
-		return bsonkit.Get(engine.Catalog().Namespaces[Oplog].Documents.List[i], name).(primitive.Timestamp)
+	get := func(i int, name string) interface{} {
+		return bsonkit.Get(engine.Catalog().Namespaces[Oplog].Documents.List[i], name)
 	}
 
 	handle := Handle{"foo", "bar"}
@@ -104,6 +104,7 @@ func TestFileStore(t *testing.T) {
 							"ts": get(0, "_id.ts"),
 						},
 						"clusterTime": get(0, "clusterTime"),
+						"wallTime":    get(0, "wallTime"),
 						"documentKey": bson.M{
 							"_id": id1,
 						},
@@ -122,6 +123,7 @@ func TestFileStore(t *testing.T) {
 							"ts": get(1, "_id.ts"),
 						},
 						"clusterTime": get(1, "clusterTime"),
+						"wallTime":    get(1, "wallTime"),
 						"documentKey": bson.M{
 							"_id": id2,
 						},

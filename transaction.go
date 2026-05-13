@@ -695,6 +695,7 @@ func (t *Transaction) append(oplog *mongokit.Collection, handle Handle, op strin
 			"ts": now,
 		},
 		"clusterTime":   now,
+		"wallTime":      primitive.NewDateTimeFromTime(time.Now()),
 		"operationType": op,
 	}
 

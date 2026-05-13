@@ -5,8 +5,10 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/256dpi/lungo/bsonkit"
@@ -157,6 +159,7 @@ func (s *Stream) next(ctx context.Context, block bool) bool {
 				"_id":           bson.M{"ts": "drop"},
 				"operationType": "invalidate",
 				"clusterTime":   bsonkit.Now(),
+				"wallTime":      primitive.NewDateTimeFromTime(time.Now()),
 			})
 			s.token = bsonkit.Get(s.event, "_id")
 			s.cancel()
